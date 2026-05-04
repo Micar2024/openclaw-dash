@@ -1,0 +1,29 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - name: Build source archive
+        run: |
+          mkdir -p dist
+          git archive --format=tar.gz --prefix=openclaw-dash/ -o "dist/openclaw-dash-${GITHUB_REF_NAME}.tar.gz" HEAD
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/openclaw-dash-${{ github.ref_name }}.tar.gz

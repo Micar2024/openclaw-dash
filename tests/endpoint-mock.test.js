@@ -106,6 +106,10 @@ echo "{}"
   await new Promise((resolve) => server.once('listening', resolve));
 
   try {
+    const authStatus = await request(server, '/api/auth/status');
+    assert.strictEqual(authStatus.status, 200);
+    assert.strictEqual(authStatus.json.local, true);
+
     const unauthorized = await request(server, '/api/metrics');
     assert.strictEqual(unauthorized.status, 401);
 
@@ -127,6 +131,25 @@ echo "{}"
     const diagnostics = await request(server, '/api/diagnostics', { headers });
     assert.strictEqual(diagnostics.status, 200);
     assert.strictEqual(diagnostics.json.openclawProbe.ok, true);
+
+    const setup = await request(server, '/api/setup/status', { headers });
+    assert.strictEqual(setup.status, 200);
+    assert.ok(Array.isArray(setup.json.checks));
+    assert.strictEqual(setup.json.remoteMode, false);
+
+    const health = await request(server, '/api/health/summary', { headers });
+    assert.strictEqual(health.status, 200);
+    assert.ok(Number.isFinite(health.json.score));
+    assert.ok(Array.isArray(health.json.checks));
+
+    const preflight = await request(server, '/api/update/preflight', { headers });
+    assert.strictEqual(preflight.status, 200);
+    assert.ok(Array.isArray(preflight.json.checks));
+
+    const report = await request(server, '/api/report.md', { headers });
+    assert.strictEqual(report.status, 200);
+    assert.match(report.body, /OpenClaw Dash 诊断报告/);
+    assert.match(report.body, /Gateway/);
 
     const snapshot = await waitForRealtimeSnapshot(server, 'endpoint-mock-token');
     assert.strictEqual(snapshot.channels.feishu, 'online');

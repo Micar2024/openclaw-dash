@@ -42,6 +42,12 @@ const {
 } = require('./src/server/runtime');
 const { getTopMemoryProcesses } = require('./src/server/processes');
 const { attachRealtimeServer } = require('./src/server/realtime');
+const { registerAuthRoutes } = require('./src/server/routes/auth');
+const { registerChannelRoutes } = require('./src/server/routes/channels');
+const { registerGatewayRoutes } = require('./src/server/routes/gateway');
+const { registerMetricsRoutes } = require('./src/server/routes/metrics');
+const { registerProductRoutes } = require('./src/server/routes/product');
+const { registerUpdateRoutes } = require('./src/server/routes/updates');
 
 const app = express();
 const DASHBOARD_TOKEN = resolveDashboardToken();
@@ -166,37 +172,6 @@ function isLocalRequest (req) {
   const address = req.socket?.remoteAddress || req.ip || '';
   return ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(address);
 }
-
-app.get('/api/auth/status', (req, res) => {
-  res.json({ authenticated: isValidSessionToken(parseCookies(req)[SESSION_COOKIE]), local: isLocalRequest(req) });
-});
-
-app.post('/api/auth/local-login', (req, res) => {
-  if (!isLocalRequest(req)) {
-    return res.status(403).json({ success: false, message: '仅允许本机浏览器一键登录。' });
-  }
-
-  setSessionCookie(res);
-  appendAudit(req, 'auth.localLogin', true);
-  res.json({ success: true, message: '本机登录成功。' });
-});
-
-app.post('/api/auth/login', (req, res) => {
-  if (!isValidDashboardToken(req.body?.token)) {
-    appendAudit(req, 'auth.login', false);
-    return res.status(401).json({ success: false, message: '访问口令无效。' });
-  }
-
-  setSessionCookie(res);
-  appendAudit(req, 'auth.login', true);
-  res.json({ success: true, message: '登录成功。' });
-});
-
-app.post('/api/auth/logout', (req, res) => {
-  clearSessionCookie(res);
-  appendAudit(req, 'auth.logout', true);
-  res.json({ success: true });
-});
 
 function appendAudit (req, action, success, detail = {}) {
   const entry = {
@@ -608,11 +583,6 @@ function getGatewayProcesses () {
   });
 }
 
-app.get('/api/status', async (req, res) => {
-  const isRunning = await checkGatewayStatus();
-  res.json({ isRunning });
-});
-
 function inferLatestChannelStatus (line) {
   if (!line || !line.trim()) return 'offline';
   const norm = line.trim().toLowerCase();
@@ -951,31 +921,6 @@ async function checkChannelsStatus () {
   return { feishu: feishu.status, telegram: telegram.status, detail: { feishu, telegram } };
 }
 
-app.get('/api/channels', async (req, res) => { res.json(await checkChannelsStatus()); });
-
-app.post('/api/channels/verify', async (req, res) => {
-  const channel = String(req.body?.channel || '').toLowerCase();
-  if (!['feishu', 'telegram'].includes(channel)) {
-    return res.status(400).json({ success: false, message: '仅支持 feishu 或 telegram。' });
-  }
-  if (req.body?.confirm !== true) {
-    return res.status(400).json({ success: false, message: '真实通道验证会发送测试消息，需要显式确认。' });
-  }
-
-  try {
-    const result = await verifyChannel(channel);
-    appendAudit(req, `channel.${channel}.verify`, true, {
-      sent: result.sent,
-      received: result.received,
-      messageId: result.messageId
-    });
-    res.json({ success: true, ...result });
-  } catch (error) {
-    appendAudit(req, `channel.${channel}.verify`, false, { error: error.message });
-    res.status(500).json({ success: false, channel, message: error.message });
-  }
-});
-
 app.get('/api/model', async (req, res) => {
   try { res.json(await getCurrentModelInfo()); } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -1143,6 +1088,11 @@ function resetUpdateJob () {
     postUpdateDiagnostics: null
   };
   persistUpdateJob();
+  return updateJob;
+}
+
+function getUpdateJob () {
+  return updateJob;
 }
 
 function addUpdateStep (name, status, detail = '') {
@@ -1246,61 +1196,6 @@ async function runUpdateJob (req, shouldRestartGateway) {
   }
 }
 
-app.post('/api/control', async (req, res) => {
-  const { action } = req.body || {};
-  if (!CONTROL_ACTIONS.has(action)) return res.status(400).json({ success: false, message: '无效操作，仅支持 start、stop、restart。' });
-  try {
-    const result = await runGatewayControl(action);
-    appendAudit(req, `gateway.${action}`, true, { pids: result.pids, isRunning: result.isRunning });
-    res.json({ success: true, action, ...result });
-  } catch (error) {
-    appendAudit(req, `gateway.${action}`, false, { error: error.message });
-    res.status(500).json({ success: false, action, message: `执行 gateway ${action} 指令失败。`, detail: error.message });
-  }
-});
-
-// Update OpenClaw: stop gateway → update → restart gateway
-app.post('/api/update', async (req, res) => {
-  try {
-    if (req.body?.dryRun) {
-      appendAudit(req, 'update.dryRun', true);
-      return res.json({ success: true, dryRun: true, message: 'dryRun 已确认，未执行真实更新。' });
-    }
-
-    if (req.body?.confirm !== true) {
-      return res.status(400).json({ success: false, message: '更新操作需要显式确认。' });
-    }
-
-    if (updateJob.running) {
-      return res.status(409).json({ success: false, message: '已有更新任务正在执行。', job: updateJob });
-    }
-
-    await assertOpenClawAvailable();
-    const preflight = await buildUpdatePreflight();
-    if (!preflight.updateAvailable) {
-      appendAudit(req, 'update.preflight', false, { reason: 'no-update', latestVersion: preflight.latestVersion });
-      return res.status(409).json({ success: false, message: '升级前预检未检测到可用更新。', preflight });
-    }
-    const blockingFailures = preflight.checks.filter((check) => !check.ok && ['磁盘空间', 'CLI 兼容性'].includes(check.name));
-    if (blockingFailures.length) {
-      appendAudit(req, 'update.preflight', false, { failures: blockingFailures });
-      return res.status(409).json({ success: false, message: '升级前预检未通过，请先处理阻断项。', preflight });
-    }
-    appendAudit(req, 'update.preflight', true, { latestVersion: preflight.latestVersion });
-    const shouldRestartGateway = await checkGatewayStatus();
-    resetUpdateJob();
-    res.json({ success: true, accepted: true, message: '更新任务已进入后台执行。', job: updateJob, preflight });
-    runUpdateJob(req, shouldRestartGateway);
-  } catch (error) {
-    appendAudit(req, 'update', false, { error: error.message });
-    res.status(500).json({ success: false, message: '更新过程出错：' + error.message });
-  }
-});
-
-app.get('/api/update/status', (req, res) => {
-  res.json(updateJob);
-});
-
 async function readAuditEntries (limit = 30) {
   const text = await readTail(AUDIT_LOG_PATH, Math.max(limit * 3, 50));
   return text.split(/\r?\n/)
@@ -1354,86 +1249,84 @@ app.get('/api/audit', async (req, res) => {
   }
 });
 
-app.get('/api/metrics', async (req, res) => {
-  try {
-    const processes = await getGatewayProcesses();
-    const gwProc = processes[0] || null;
-    const gateway = { pid: null, isRunning: processes.length > 0, uptime: null, uptimeSeconds: null, memoryRssMb: null, command: null };
-    if (gwProc) {
-      gateway.pid = gwProc.pid; gateway.command = gwProc.command;
-      try {
-        const psInfo = await getProcessResourceInfo(gwProc.pid);
-        if (psInfo) {
-          gateway.uptime = psInfo.etime; gateway.memoryRssMb = psInfo.rssKb ? Math.round(psInfo.rssKb / 1024) : null;
-          const etime = psInfo.etime;
-          if (etime) {
-            const parts = etime.split('-'); let timePart = etime; let days = 0;
-            if (parts.length > 1) { days = parseInt(parts[0], 10) || 0; timePart = parts[1]; }
-            const tparts = timePart.split(':').map(Number); let secs = days * 86400;
-            if (tparts.length === 3) secs += tparts[0] * 3600 + tparts[1] * 60 + tparts[2];
-            else if (tparts.length === 2) secs += tparts[0] * 60 + tparts[1];
-            gateway.uptimeSeconds = secs;
-          }
+async function buildMetrics () {
+  const processes = await getGatewayProcesses();
+  const gwProc = processes[0] || null;
+  const gateway = { pid: null, isRunning: processes.length > 0, uptime: null, uptimeSeconds: null, memoryRssMb: null, command: null };
+  if (gwProc) {
+    gateway.pid = gwProc.pid; gateway.command = gwProc.command;
+    try {
+      const psInfo = await getProcessResourceInfo(gwProc.pid);
+      if (psInfo) {
+        gateway.uptime = psInfo.etime; gateway.memoryRssMb = psInfo.rssKb ? Math.round(psInfo.rssKb / 1024) : null;
+        const etime = psInfo.etime;
+        if (etime) {
+          const parts = etime.split('-'); let timePart = etime; let days = 0;
+          if (parts.length > 1) { days = parseInt(parts[0], 10) || 0; timePart = parts[1]; }
+          const tparts = timePart.split(':').map(Number); let secs = days * 86400;
+          if (tparts.length === 3) secs += tparts[0] * 3600 + tparts[1] * 60 + tparts[2];
+          else if (tparts.length === 2) secs += tparts[0] * 60 + tparts[1];
+          gateway.uptimeSeconds = secs;
         }
-      } catch (_) {}
-    }
-    const [feishuHealth, telegramHealth, feishuStats, telegramStats] = await Promise.all([
-      getChannelHealth('feishu'),
-      getChannelHealth('telegram'),
-      getChannelMessageStats('feishu'),
-      getChannelMessageStats('telegram')
-    ]);
-    const channels = {
-      feishu: { ...feishuHealth, stats: feishuStats },
-      telegram: { ...telegramHealth, stats: telegramStats }
-    };
-    const disk = await getDiskInfo();
-    // Memory info (macOS: accurate via vm_stat; page size 16384 on Apple Silicon)
-    const [localVersion, latestRelease, model] = await Promise.all([getLocalVersion(), getLatestReleaseInfo(), getCurrentModelInfo()]);
-    const memory = await new Promise((resolve) => {
-      execFile('vm_stat', [], { timeout: 5000 }, (err, stdout) => {
-        if (err) {
-          const totalBytes = os.totalmem();
-          const freeBytes = os.freemem();
-          resolve({ totalGb: (totalBytes / 1024 / 1024 / 1024).toFixed(1), freeGb: (freeBytes / 1024 / 1024 / 1024).toFixed(1), usedGb: ((totalBytes - freeBytes) / 1024 / 1024 / 1024).toFixed(1), usedPercent: Math.round(((totalBytes - freeBytes) / totalBytes) * 100), reclaimableGb: '0.0', source: 'freemem' });
-          return;
-        }
-        const stats = {};
-        for (const line of stdout.split('\n')) {
-          const m = line.match(/^\s*(.+?):\s*(\d+)\./);
-          if (m) stats[m[1].trim()] = parseInt(m[2], 10) || 0;
-        }
-        const pagesize = 16384;
-        const freePages = stats['Pages free'] || 0;
-        const activePages = stats['Pages active'] || 0;
-        const inactivePages = stats['Pages inactive'] || 0;
-        const speculativePages = stats['Pages speculative'] || 0;
-        const wiredPages = stats['Pages wired down'] || 0;
-        const compressedPages = stats['Pages occupied by compressor'] || 0;
+      }
+    } catch (_) {}
+  }
+  const [feishuHealth, telegramHealth, feishuStats, telegramStats] = await Promise.all([
+    getChannelHealth('feishu'),
+    getChannelHealth('telegram'),
+    getChannelMessageStats('feishu'),
+    getChannelMessageStats('telegram')
+  ]);
+  const channels = {
+    feishu: { ...feishuHealth, stats: feishuStats },
+    telegram: { ...telegramHealth, stats: telegramStats }
+  };
+  const disk = await getDiskInfo();
+  // Memory info (macOS: accurate via vm_stat; page size 16384 on Apple Silicon)
+  const [localVersion, latestRelease, model] = await Promise.all([getLocalVersion(), getLatestReleaseInfo(), getCurrentModelInfo()]);
+  const memory = await new Promise((resolve) => {
+    execFile('vm_stat', [], { timeout: 5000 }, (err, stdout) => {
+      if (err) {
         const totalBytes = os.totalmem();
-        const trulyFreeBytes = freePages * pagesize;
-        const reclaimableBytes = (inactivePages + speculativePages) * pagesize;
-        // 已用 = Active (压缩已计入"可回收"范畴,回收时自动解压)
-        const appUsedBytes = activePages * pagesize;
-        const compressedBytes = compressedPages * pagesize;
-        resolve({
-          totalGb: (totalBytes / 1024 / 1024 / 1024).toFixed(1),
-          freeGb: (trulyFreeBytes / 1024 / 1024 / 1024).toFixed(1),
-          reclaimableGb: (reclaimableBytes / 1024 / 1024 / 1024).toFixed(1),
-          usedGb: (appUsedBytes / 1024 / 1024 / 1024).toFixed(1),
-          usedPercent: Math.round((appUsedBytes / totalBytes) * 100),
-          activeGb: (activePages * pagesize / 1024 / 1024 / 1024).toFixed(1),
-          compressedGb: (compressedBytes / 1024 / 1024 / 1024).toFixed(1),
-          wiredGb: (wiredPages * pagesize / 1024 / 1024 / 1024).toFixed(1),
-          source: 'vm_stat'
-        });
+        const freeBytes = os.freemem();
+        resolve({ totalGb: (totalBytes / 1024 / 1024 / 1024).toFixed(1), freeGb: (freeBytes / 1024 / 1024 / 1024).toFixed(1), usedGb: ((totalBytes - freeBytes) / 1024 / 1024 / 1024).toFixed(1), usedPercent: Math.round(((totalBytes - freeBytes) / totalBytes) * 100), reclaimableGb: '0.0', source: 'freemem' });
+        return;
+      }
+      const stats = {};
+      for (const line of stdout.split('\n')) {
+        const m = line.match(/^\s*(.+?):\s*(\d+)\./);
+        if (m) stats[m[1].trim()] = parseInt(m[2], 10) || 0;
+      }
+      const pagesize = 16384;
+      const freePages = stats['Pages free'] || 0;
+      const activePages = stats['Pages active'] || 0;
+      const inactivePages = stats['Pages inactive'] || 0;
+      const speculativePages = stats['Pages speculative'] || 0;
+      const wiredPages = stats['Pages wired down'] || 0;
+      const compressedPages = stats['Pages occupied by compressor'] || 0;
+      const totalBytes = os.totalmem();
+      const trulyFreeBytes = freePages * pagesize;
+      const reclaimableBytes = (inactivePages + speculativePages) * pagesize;
+      // 已用 = Active (压缩已计入"可回收"范畴,回收时自动解压)
+      const appUsedBytes = activePages * pagesize;
+      const compressedBytes = compressedPages * pagesize;
+      resolve({
+        totalGb: (totalBytes / 1024 / 1024 / 1024).toFixed(1),
+        freeGb: (trulyFreeBytes / 1024 / 1024 / 1024).toFixed(1),
+        reclaimableGb: (reclaimableBytes / 1024 / 1024 / 1024).toFixed(1),
+        usedGb: (appUsedBytes / 1024 / 1024 / 1024).toFixed(1),
+        usedPercent: Math.round((appUsedBytes / totalBytes) * 100),
+        activeGb: (activePages * pagesize / 1024 / 1024 / 1024).toFixed(1),
+        compressedGb: (compressedBytes / 1024 / 1024 / 1024).toFixed(1),
+        wiredGb: (wiredPages * pagesize / 1024 / 1024 / 1024).toFixed(1),
+        source: 'vm_stat'
       });
     });
-    const memoryProcesses = await getTopMemoryProcesses();
-    const updateAvailable = Boolean(parseVersion(localVersion) && parseVersion(latestRelease.latestVersion) && isVersionGreater(latestRelease.latestVersion, localVersion));
-    res.json({ gateway, channels, disk, memory, memoryProcesses, version: { local: localVersion, latest: latestRelease.latestVersion, updateAvailable, releaseUrl: latestRelease.releaseUrl, publishedAt: latestRelease.publishedAt, source: latestRelease.source }, model, collectedAt: new Date().toISOString() });
-  } catch (error) { res.status(500).json({ error: error.message }); }
-});
+  });
+  const memoryProcesses = await getTopMemoryProcesses();
+  const updateAvailable = Boolean(parseVersion(localVersion) && parseVersion(latestRelease.latestVersion) && isVersionGreater(latestRelease.latestVersion, localVersion));
+  return { gateway, channels, disk, memory, memoryProcesses, version: { local: localVersion, latest: latestRelease.latestVersion, updateAvailable, releaseUrl: latestRelease.releaseUrl, publishedAt: latestRelease.publishedAt, source: latestRelease.source }, model, collectedAt: new Date().toISOString() };
+}
 
 app.get('/api/timeline', async (req, res) => {
   try {
@@ -1667,12 +1560,168 @@ function buildConfigHealth () {
   };
 }
 
+function fileCheck (name, filePath, options = {}) {
+  const exists = fs.existsSync(filePath);
+  let readable = false;
+  if (exists) {
+    try {
+      fs.accessSync(filePath, fs.constants.R_OK);
+      readable = true;
+    } catch {}
+  }
+  return {
+    name,
+    ok: options.optional ? true : Boolean(exists && readable),
+    exists,
+    readable,
+    path: filePath,
+    detail: exists ? (readable ? '可读取' : '存在但不可读取') : (options.optional ? '未发现，可选项' : '未发现')
+  };
+}
+
+async function buildSetupStatus () {
+  const gatewayRunning = await checkGatewayStatus();
+  const launchAgentPath = path.join(os.homedir(), 'Library', 'LaunchAgents', 'com.openclaw.dashboard.plist');
+  const cliCheck = await runCommandCheck('OpenClaw CLI', OPENCLAW_BIN, ['--version'], 5000);
+  const remoteMode = !['127.0.0.1', 'localhost', '::1'].includes(HOST);
+  const checks = [
+    { name: 'OpenClaw CLI', ok: cliCheck.ok, detail: cliCheck.ok ? cliCheck.output : (cliCheck.error || '未检测到 OpenClaw CLI。') },
+    { name: 'Gateway 当前状态', ok: gatewayRunning, detail: gatewayRunning ? 'Gateway 正在运行。' : 'Gateway 未运行，可在控制面板启动。' },
+    fileCheck('Gateway 日志路径', LOG_PATH),
+    fileCheck('错误日志路径', ERR_LOG_PATH, { optional: true }),
+    fileCheck('OpenClaw 配置文件', OPENCLAW_CONFIG_PATH),
+    fileCheck('Dashboard 访问口令', TOKEN_PATH),
+    fileCheck('macOS LaunchAgent', launchAgentPath, { optional: true }),
+    {
+      name: '访问模式',
+      ok: !remoteMode,
+      detail: remoteMode ? `当前监听 ${HOST}，请确认只在可信局域网使用。` : '仅本机访问，默认安全。'
+    }
+  ];
+  const required = checks.filter((check) => !['macOS LaunchAgent', '错误日志路径'].includes(check.name));
+  const passed = required.filter((check) => check.ok).length;
+  return {
+    ok: passed === required.length,
+    passed,
+    required: required.length,
+    checks,
+    host: HOST,
+    port: PORT,
+    remoteMode,
+    collectedAt: new Date().toISOString()
+  };
+}
+
+async function buildHealthSummary () {
+  const [metrics, errors] = await Promise.all([
+    buildMetrics(),
+    readRecentErrorEntriesWithMeta(1000, 10)
+  ]);
+  let score = 100;
+  const checks = [];
+
+  function addCheck (name, ok, detail, penalty) {
+    checks.push({ name, ok, detail, penalty: ok ? 0 : penalty });
+    if (!ok) score -= penalty;
+  }
+
+  addCheck('Gateway', metrics.gateway.isRunning, metrics.gateway.isRunning ? `PID ${metrics.gateway.pid || '-'}` : '未检测到 Gateway 进程。', 35);
+  addCheck('飞书通道', metrics.channels.feishu.status === 'online', metrics.channels.feishu.reason || metrics.channels.feishu.status, 15);
+  addCheck('Telegram 通道', metrics.channels.telegram.status === 'online', metrics.channels.telegram.reason || metrics.channels.telegram.status, 15);
+  addCheck('磁盘空间', Number(metrics.disk.usedPercent || 0) < 90, `已用 ${metrics.disk.usedPercent ?? '-'}%`, Number(metrics.disk.usedPercent || 0) > 75 ? 10 : 5);
+  addCheck('版本状态', !metrics.version.updateAvailable, metrics.version.updateAvailable ? `${metrics.version.local} → ${metrics.version.latest}` : '当前版本未发现更新。', 5);
+
+  const errorPenalty = Math.min(20, errors.errors.length * 3);
+  if (errorPenalty) score -= errorPenalty;
+  checks.push({
+    name: '近期错误日志',
+    ok: errors.errors.length === 0,
+    detail: errors.errors.length ? `${errors.errors.length} 条未静音错误，${errors.mutedCount} 条已静音。` : `${errors.mutedCount} 条已静音，无未处理错误。`,
+    penalty: errorPenalty
+  });
+
+  score = Math.max(0, Math.min(100, score));
+  const level = score >= 90 ? 'excellent' : score >= 75 ? 'good' : score >= 60 ? 'attention' : 'critical';
+  const summary = score >= 90
+    ? '今日状态稳定，可以放心使用。'
+    : score >= 75
+      ? '核心功能可用，但有少量项目值得关注。'
+      : score >= 60
+        ? '存在影响体验的风险，建议先处理黄色项。'
+        : '核心链路存在明显异常，建议立即检查。';
+
+  return { score, level, summary, checks, collectedAt: new Date().toISOString() };
+}
+
+function markdownEscape (value) {
+  return String(value ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+}
+
+async function buildMarkdownReport () {
+  const [metrics, diagnostics, health, errors] = await Promise.all([
+    buildMetrics(),
+    buildDiagnostics(),
+    buildHealthSummary(),
+    readRecentErrorEntriesWithMeta(1000, 8)
+  ]);
+  const lines = [];
+  lines.push('# OpenClaw Dash 诊断报告');
+  lines.push('');
+  lines.push(`生成时间：${new Date().toLocaleString()}`);
+  lines.push('');
+  lines.push('## 今日摘要');
+  lines.push('');
+  lines.push(`- 健康分：${health.score}/100`);
+  lines.push(`- 结论：${health.summary}`);
+  lines.push('');
+  lines.push('## Gateway');
+  lines.push('');
+  lines.push(`- 状态：${metrics.gateway.isRunning ? 'Running' : 'Stopped'}`);
+  lines.push(`- PID：${metrics.gateway.pid || '-'}`);
+  lines.push(`- 运行时长：${metrics.gateway.uptime || '-'}`);
+  lines.push(`- 内存：${metrics.gateway.memoryRssMb || '-'} MB`);
+  lines.push('');
+  lines.push('## 版本');
+  lines.push('');
+  lines.push(`- 本地版本：${metrics.version.local || '-'}`);
+  lines.push(`- 最新版本：${metrics.version.latest || '-'}`);
+  lines.push(`- 有可用更新：${metrics.version.updateAvailable ? '是' : '否'}`);
+  lines.push(`- 来源：${metrics.version.source || '-'}`);
+  lines.push('');
+  lines.push('## 通道');
+  lines.push('');
+  lines.push('| 通道 | 状态 | 最近活动 | 今日消息 | 最近 1 小时 | 错误 |');
+  lines.push('| --- | --- | --- | ---: | ---: | ---: |');
+  for (const [name, channel] of Object.entries(metrics.channels)) {
+    lines.push(`| ${markdownEscape(name)} | ${markdownEscape(channel.status)} | ${markdownEscape(channel.lastSeenAt || '-')} | ${channel.stats?.todayMessages ?? '-'} | ${channel.stats?.lastHourMessages ?? '-'} | ${channel.stats?.errorCount ?? '-'} |`);
+  }
+  lines.push('');
+  lines.push('## 系统资源');
+  lines.push('');
+  lines.push(`- 磁盘：可用 ${metrics.disk.freeGb ?? '-'} GB，已用 ${metrics.disk.usedPercent ?? '-'}%`);
+  lines.push(`- 内存：已用 ${metrics.memory.usedGb ?? '-'} GB / ${metrics.memory.totalGb ?? '-'} GB（${metrics.memory.usedPercent ?? '-'}%）`);
+  lines.push('');
+  lines.push('## 诊断建议');
+  lines.push('');
+  for (const item of diagnostics.recommendations || []) {
+    lines.push(`- ${item.title}：${item.detail}`);
+  }
+  lines.push('');
+  lines.push('## 近期错误');
+  lines.push('');
+  if (!errors.errors.length) {
+    lines.push('- 暂无未静音错误。');
+  } else {
+    for (const entry of errors.errors) {
+      lines.push(`- ${entry.timestamp || '-'} · ${entry.source}: ${entry.message}`);
+    }
+  }
+  lines.push('');
+  return `${lines.join('\n')}\n`;
+}
+
 app.get('/api/compatibility', async (req, res) => {
   try { res.json(await buildCompatibilityReport()); } catch (error) { res.status(500).json({ error: error.message }); }
-});
-
-app.get('/api/update/preflight', async (req, res) => {
-  try { res.json(await buildUpdatePreflight()); } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 app.get('/api/version/sources', async (req, res) => {
@@ -1707,6 +1756,48 @@ app.post('/api/log-rules', (req, res) => {
   res.json({ success: true, rules });
 });
 
+registerAuthRoutes(app, {
+  appendAudit,
+  clearSessionCookie,
+  isLocalRequest,
+  isValidDashboardToken,
+  isValidSessionToken,
+  parseCookies,
+  sessionCookie: SESSION_COOKIE,
+  setSessionCookie
+});
+
+registerGatewayRoutes(app, {
+  appendAudit,
+  checkGatewayStatus,
+  controlActions: CONTROL_ACTIONS,
+  runGatewayControl
+});
+
+registerChannelRoutes(app, {
+  appendAudit,
+  checkChannelsStatus,
+  verifyChannel
+});
+
+registerUpdateRoutes(app, {
+  appendAudit,
+  assertOpenClawAvailable,
+  buildUpdatePreflight,
+  checkGatewayStatus,
+  getUpdateJob,
+  resetUpdateJob,
+  runUpdateJob
+});
+
+registerMetricsRoutes(app, { buildMetrics });
+
+registerProductRoutes(app, {
+  buildHealthSummary,
+  buildMarkdownReport,
+  buildSetupStatus
+});
+
 async function collectRealtimeSnapshot () {
   const [processes, channels] = await Promise.all([
     getGatewayProcesses(),
@@ -1734,6 +1825,9 @@ function startDashboard () {
   let channelTimer = null;
   const httpServer = app.listen(PORT, HOST, async () => {
     console.log(`OpenClaw Dash is running at http://${HOST}:${PORT}`);
+    if (!['127.0.0.1', 'localhost', '::1'].includes(HOST)) {
+      console.warn(`[Security] Dashboard is listening on ${HOST}. Only expose it on trusted networks and keep the dashboard token private.`);
+    }
     await initializeWatchdogState();
     runChannelWatchdogCheck();
     watchdogTimer = setInterval(runWatchdogCheck, WATCHDOG_INTERVAL_MS);

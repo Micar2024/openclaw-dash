@@ -2,6 +2,15 @@
 
 A local macOS management dashboard for OpenClaw Gateway. It focuses on practical operations: version checks, gateway control, channel health, compatibility diagnostics, update preflight checks, logs, audit events, memory/disk metrics, and privacy-safe dashboard exports.
 
+![OpenClaw Dash overview](docs/images/dashboard-overview.svg)
+
+## Use Cases
+
+- Keep a personal OpenClaw Gateway visible after macOS login.
+- Confirm Feishu and Telegram are not merely connected, but recently active and probeable.
+- Run update preflight checks before `openclaw update`.
+- Export a support report or privacy-masked long screenshot when asking others to help diagnose a problem.
+
 ## Features
 
 - Local version and upstream version monitoring with GitHub, npm, and dashboard cache fallback.
@@ -15,6 +24,11 @@ A local macOS management dashboard for OpenClaw Gateway. It focuses on practical
 - Read-only configuration health view for channel enablement, allowlist counts, and `blockStreaming`.
 - Log noise muting for known harmless lines such as `bot open_id resolved: unknown`.
 - High-resolution long screenshot export with automatic masking for common private identifiers.
+- First-run wizard for OpenClaw CLI, Gateway, log paths, config readability, token, LaunchAgent, and access mode.
+- Health score and daily summary across Gateway, channels, version, disk, and recent errors.
+- Markdown report export for diagnostics, version, channel, resource, and error summaries.
+
+![Realtime monitoring flow](docs/images/realtime-flow.svg)
 
 ## Requirements
 
@@ -62,6 +76,14 @@ http://127.0.0.1:3000
 
 The dashboard binds to `127.0.0.1` by default. Local browser access can sign in without manually reading the token. Remote access requires the dashboard token.
 
+For a one-command macOS login item install:
+
+```bash
+./scripts/install-macos.sh
+```
+
+This installs dependencies, builds local frontend assets, writes `~/Library/LaunchAgents/com.openclaw.dashboard.plist`, and starts the dashboard service.
+
 ## Configuration
 
 Optional environment variables:
@@ -103,7 +125,13 @@ Feishu direct diagnostics prefer `OPENCLAW_DASH_FEISHU_APP_ID` and `OPENCLAW_DAS
 
 ## macOS LaunchAgent
 
-You can run the dashboard at login with a LaunchAgent. Adjust paths if your project lives somewhere else.
+The recommended path is the installer:
+
+```bash
+./scripts/install-macos.sh
+```
+
+Manual LaunchAgent setup is also possible. Adjust paths if your project lives somewhere else.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -141,6 +169,7 @@ launchctl kickstart -k gui/$(id -u)/com.openclaw.dashboard
 ## Safety Notes
 
 - The dashboard is designed for local use and binds to `127.0.0.1` by default.
+- Setting `DASHBOARD_HOST=0.0.0.0` enables LAN access. Only do this on a trusted network, and keep `~/.openclaw/dash-token` private.
 - It does not edit OpenClaw configuration files.
 - Control actions are limited to OpenClaw Gateway operations and update orchestration.
 - Channel "real verification" sends a test message only after explicit confirmation.
@@ -178,6 +207,21 @@ The server is organized as a route aggregator plus focused support modules under
 - `runtime.js` for filesystem and system-command helpers.
 - `processes.js` for process/memory display helpers.
 - `realtime.js` for WebSocket state streaming.
+- `routes/auth.js` for authentication endpoints.
+- `routes/gateway.js` for Gateway status and control endpoints.
+- `routes/channels.js` for channel status and real probe endpoints.
+- `routes/metrics.js` for dashboard metrics.
+- `routes/updates.js` for update and preflight endpoints.
+- `routes/product.js` for setup, health summary, and Markdown report export.
+
+## Releases
+
+The package version starts at `v1.0.0`. Pushing a `v*` tag runs the release workflow, executes lint/tests, and publishes a source archive on GitHub Releases:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 ## License
 

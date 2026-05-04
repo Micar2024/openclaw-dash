@@ -1,5 +1,6 @@
 node_modules/
 logs/
+promo/
 
 .DS_Store
 .env
@@ -17,4 +18,3 @@ dash-audit.log
 dash-update-job.json
 dash-version-cache.json
 dash-log-muted-rules.json
-

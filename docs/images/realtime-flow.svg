@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-label="OpenClaw Dash realtime monitoring flow">
+  <rect width="1200" height="360" fill="#09090b"/>
+  <g fill="#18181b" stroke="#2f2f35" stroke-width="2">
+    <rect x="90" y="92" width="230" height="132" rx="14"/>
+    <rect x="485" y="92" width="230" height="132" rx="14"/>
+    <rect x="880" y="92" width="230" height="132" rx="14"/>
+  </g>
+  <g stroke="#34d399" stroke-width="4" fill="none" stroke-linecap="round">
+    <path d="M330 158 H465"/>
+    <path d="M725 158 H860"/>
+    <path d="M450 146 L465 158 L450 170"/>
+    <path d="M845 146 L860 158 L845 170"/>
+  </g>
+  <g font-family="Arial, sans-serif" text-anchor="middle">
+    <text x="205" y="145" fill="#fafafa" font-size="28" font-weight="700">OpenClaw</text>
+    <text x="205" y="182" fill="#a1a1aa" font-size="18">Gateway / CLI / Logs</text>
+    <text x="600" y="145" fill="#fafafa" font-size="28" font-weight="700">Dash Server</text>
+    <text x="600" y="182" fill="#a1a1aa" font-size="18">Auth / Metrics / WebSocket</text>
+    <text x="995" y="145" fill="#fafafa" font-size="28" font-weight="700">Dashboard UI</text>
+    <text x="995" y="182" fill="#a1a1aa" font-size="18">Health / Control / Reports</text>
+  </g>
+  <text x="600" y="290" fill="#34d399" font-family="Arial, sans-serif" font-size="20" font-weight="700" text-anchor="middle">Realtime push with polling fallback</text>
+</svg>

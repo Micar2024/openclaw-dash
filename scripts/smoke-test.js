@@ -7,6 +7,7 @@ const { spawnSync } = require('child_process');
 const root = path.resolve(__dirname, '..');
 const serverPath = path.join(root, 'server.js');
 const configPath = path.join(root, 'src', 'server', 'config.js');
+const routeDir = path.join(root, 'src', 'server', 'routes');
 const htmlPath = path.join(root, 'public', 'index.html');
 const cssPath = path.join(root, 'public', 'assets', 'app.css');
 const html2canvasPath = path.join(root, 'public', 'vendor', 'html2canvas.min.js');
@@ -72,6 +73,11 @@ async function main () {
   run(process.execPath, ['--check', serverPath]);
 
   const server = fs.readFileSync(serverPath, 'utf8');
+  const routeSources = fs.readdirSync(routeDir)
+    .filter((file) => file.endsWith('.js'))
+    .map((file) => fs.readFileSync(path.join(routeDir, file), 'utf8'))
+    .join('\n');
+  const apiSources = `${server}\n${routeSources}`;
   if (/(?<!\.)\bexec\s*\(/.test(server)) {
     fail('server.js should use execFile/spawn instead of shell-string exec().');
   }
@@ -93,8 +99,8 @@ async function main () {
     fail('Potential hardcoded secret assignment found in server.js.');
   }
 
-  for (const route of ['/api/status', '/api/metrics', '/api/diagnostics', '/api/update/preflight', '/api/config/health']) {
-    if (!server.includes(`'${route}'`) && !server.includes(`"${route}"`)) fail(`Expected API route missing: ${route}`);
+  for (const route of ['/api/status', '/api/metrics', '/api/diagnostics', '/api/update/preflight', '/api/config/health', '/api/setup/status', '/api/health/summary', '/api/report.md']) {
+    if (!apiSources.includes(`'${route}'`) && !apiSources.includes(`"${route}"`)) fail(`Expected API route missing: ${route}`);
   }
 
   const config = fs.readFileSync(configPath, 'utf8');

@@ -8,8 +8,8 @@
     "build:css": "BROWSERSLIST_IGNORE_OLD_DATA=1 tailwindcss -i ./src/styles.css -o ./public/assets/app.css --minify",
     "build:vendor": "node scripts/prepare-assets.js",
     "build:assets": "npm run build:css && npm run build:vendor",
-    "check": "node --check server.js && node --check scripts/smoke-test.js && node --check scripts/prepare-assets.js && node --check tests/endpoint-mock.test.js",
-    "lint": "semistandard server.js scripts/*.js src/server/*.js tests/*.js tailwind.config.js",
+    "check": "node --check server.js && node --check scripts/smoke-test.js && node --check scripts/prepare-assets.js && node --check src/server/*.js && node --check src/server/routes/*.js && node --check tests/endpoint-mock.test.js",
+    "lint": "semistandard server.js scripts/*.js src/server/*.js src/server/routes/*.js tests/*.js tailwind.config.js",
     "lint:security": "node scripts/smoke-test.js",
     "test": "npm run build:assets && node scripts/smoke-test.js && node tests/endpoint-mock.test.js"
   },

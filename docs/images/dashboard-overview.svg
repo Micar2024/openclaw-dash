@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-label="OpenClaw Dash sanitized dashboard preview">
+  <rect width="1200" height="760" fill="#09090b"/>
+  <rect x="160" y="56" width="880" height="648" rx="18" fill="#111113" stroke="#27272a"/>
+  <text x="196" y="112" fill="#34d399" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="4">OPENCLAW DASH</text>
+  <text x="196" y="160" fill="#fafafa" font-family="Arial, sans-serif" font-size="46" font-weight="700">OpenClaw 管理看板</text>
+  <text x="196" y="194" fill="#a1a1aa" font-family="Arial, sans-serif" font-size="18">Gateway、通道、版本、资源与诊断集中监控</text>
+  <g fill="#18181b" stroke="#2f2f35">
+    <rect x="196" y="244" width="390" height="116" rx="10"/>
+    <rect x="614" y="244" width="390" height="116" rx="10"/>
+    <rect x="196" y="388" width="808" height="138" rx="10"/>
+    <rect x="196" y="554" width="390" height="102" rx="10"/>
+    <rect x="614" y="554" width="390" height="102" rx="10"/>
+  </g>
+  <g font-family="Arial, sans-serif">
+    <text x="228" y="286" fill="#a1a1aa" font-size="15">本地版本</text>
+    <text x="228" y="324" fill="#ffffff" font-size="25" font-weight="700">OpenClaw 2026.5.3</text>
+    <text x="646" y="286" fill="#a1a1aa" font-size="15">官方最新版本</text>
+    <text x="646" y="324" fill="#ffffff" font-size="25" font-weight="700">v2026.5.3-1</text>
+    <text x="228" y="432" fill="#a1a1aa" font-size="15">今日健康摘要</text>
+    <text x="228" y="478" fill="#34d399" font-size="52" font-weight="700">96</text>
+    <text x="314" y="470" fill="#d4d4d8" font-size="20">核心链路正常</text>
+    <text x="228" y="598" fill="#a1a1aa" font-size="15">飞书通道</text>
+    <circle cx="548" cy="592" r="7" fill="#10b981"/>
+    <text x="228" y="632" fill="#34d399" font-size="28" font-weight="700">Online</text>
+    <text x="646" y="598" fill="#a1a1aa" font-size="15">Gateway 运行控制</text>
+    <circle cx="970" cy="592" r="7" fill="#10b981"/>
+    <text x="646" y="632" fill="#34d399" font-size="28" font-weight="700">Running</text>
+  </g>
+</svg>

@@ -67,6 +67,9 @@
             <button id="export-screenshot-btn" onclick="exportDashboardImage()" class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-3 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="导出脱敏高清长图">
               导出长图
             </button>
+            <button id="export-report-btn" onclick="exportMarkdownReport()" class="rounded-md border border-sky-400/20 bg-sky-400/10 px-3 py-3 text-xs font-semibold text-sky-200 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="导出 Markdown 诊断报告">
+              导出报告
+            </button>
             <div class="rounded-md border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
               <span class="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-400"></span>
               状态与控制
@@ -146,6 +149,36 @@
               升级后复检
             </button>
           </div>
+        </section>
+
+        <!-- Health Summary + First Run Wizard -->
+        <section class="mt-8 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium text-zinc-400">今日健康摘要</p>
+                <h2 id="health-score" class="mt-3 text-5xl font-semibold text-white">--</h2>
+                <p id="health-summary" class="mt-3 text-sm leading-6 text-zinc-500">正在汇总 Gateway、通道、版本、磁盘和错误日志。</p>
+              </div>
+              <span id="health-level" class="rounded-md border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-500">Loading</span>
+            </div>
+            <div id="health-checks" class="mt-5 space-y-2 text-xs text-zinc-500"></div>
+            <p id="health-updated" class="mt-4 text-xs text-zinc-600">等待刷新</p>
+          </article>
+
+          <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p class="text-sm font-medium text-zinc-400">首次启动向导</p>
+                <h2 id="setup-summary" class="mt-3 text-2xl font-semibold text-white">正在检查环境</h2>
+                <p id="setup-updated" class="mt-3 text-sm leading-6 text-zinc-500">检查 OpenClaw、Gateway、日志路径、配置权限与访问模式。</p>
+              </div>
+              <button type="button" onclick="loadSetupStatus()" class="self-start rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12]">
+                重新检查
+              </button>
+            </div>
+            <div id="setup-list" class="mt-5 grid gap-2 text-xs text-zinc-500 sm:grid-cols-2"></div>
+          </article>
         </section>
 
         <!-- System Assurance -->
@@ -616,6 +649,15 @@
       const updateProgressDetails = document.getElementById('update-progress-details');
       const updateDetailsToggle = document.getElementById('update-details-toggle');
       const exportScreenshotBtn = document.getElementById('export-screenshot-btn');
+      const exportReportBtn = document.getElementById('export-report-btn');
+      const healthScoreEl = document.getElementById('health-score');
+      const healthSummaryEl = document.getElementById('health-summary');
+      const healthLevelEl = document.getElementById('health-level');
+      const healthChecksEl = document.getElementById('health-checks');
+      const healthUpdatedEl = document.getElementById('health-updated');
+      const setupSummaryEl = document.getElementById('setup-summary');
+      const setupUpdatedEl = document.getElementById('setup-updated');
+      const setupListEl = document.getElementById('setup-list');
       const assuranceSummaryEl = document.getElementById('assurance-summary');
       const assuranceUpdatedEl = document.getElementById('assurance-updated');
       const compatibilityPillEl = document.getElementById('compatibility-pill');
@@ -760,6 +802,7 @@
         const contentClone = document.querySelector('main > section').cloneNode(true);
 
         headerClone.querySelector('#export-screenshot-btn')?.remove();
+        headerClone.querySelector('#export-report-btn')?.remove();
         headerClone.querySelector('button[onclick="logout()"]')?.remove();
 
         for (const button of contentClone.querySelectorAll('button')) {
@@ -841,6 +884,29 @@
           if (exportTarget) exportTarget.remove();
           exportScreenshotBtn.disabled = false;
           exportScreenshotBtn.textContent = oldText;
+        }
+      }
+
+      async function exportMarkdownReport() {
+        exportReportBtn.disabled = true;
+        const oldText = exportReportBtn.textContent;
+        exportReportBtn.textContent = '导出中...';
+        try {
+          const response = await authFetch('/api/report.md');
+          if (!response.ok) throw new Error('报告接口返回异常。');
+          const markdown = await response.text();
+          const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `openclaw-report-${new Date().toISOString().replace(/[:.]/g, '-')}.md`;
+          link.click();
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          showApiError('报告导出失败', error.message);
+        } finally {
+          exportReportBtn.disabled = false;
+          exportReportBtn.textContent = oldText;
         }
       }
 
@@ -993,6 +1059,61 @@
         isUpdateDetailsExpanded = !isUpdateDetailsExpanded;
         updateProgressDetails.classList.toggle('hidden', !isUpdateDetailsExpanded);
         updateDetailsToggle.textContent = isUpdateDetailsExpanded ? '收起详情' : '展开详情';
+      }
+
+      async function loadHealthSummary() {
+        try {
+          const response = await authFetch('/api/health/summary');
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || '健康摘要读取失败。');
+
+          const score = Number(data.score || 0);
+          const tone = score >= 90
+            ? { text: 'Excellent', score: 'text-emerald-300', pill: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' }
+            : score >= 75
+              ? { text: 'Good', score: 'text-sky-300', pill: 'border-sky-400/20 bg-sky-400/10 text-sky-300' }
+              : score >= 60
+                ? { text: 'Attention', score: 'text-amber-300', pill: 'border-amber-400/20 bg-amber-400/10 text-amber-200' }
+                : { text: 'Critical', score: 'text-rose-300', pill: 'border-rose-400/20 bg-rose-400/10 text-rose-300' };
+
+          healthScoreEl.textContent = `${score}`;
+          healthScoreEl.className = `mt-3 text-5xl font-semibold ${tone.score}`;
+          healthSummaryEl.textContent = data.summary || '健康摘要已刷新。';
+          healthLevelEl.textContent = tone.text;
+          healthLevelEl.className = `rounded-md border px-3 py-1 text-xs ${tone.pill}`;
+          healthChecksEl.innerHTML = renderMiniRows((data.checks || []).map((check) => ({
+            name: `${check.name}${check.penalty ? ' · -' + check.penalty : ''}`,
+            ok: check.ok,
+            detail: check.detail,
+          })));
+          healthUpdatedEl.textContent = data.collectedAt ? '更新于 ' + new Date(data.collectedAt).toLocaleString() : '已刷新';
+        } catch (error) {
+          healthScoreEl.textContent = '--';
+          healthScoreEl.className = 'mt-3 text-5xl font-semibold text-rose-300';
+          healthSummaryEl.textContent = error.message;
+          healthLevelEl.textContent = 'Error';
+          healthLevelEl.className = 'rounded-md border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-xs text-rose-300';
+        }
+      }
+
+      async function loadSetupStatus() {
+        setupSummaryEl.textContent = '正在检查环境...';
+        try {
+          const response = await authFetch('/api/setup/status');
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || '首次启动向导读取失败。');
+
+          setupSummaryEl.textContent = data.ok ? '启动环境已就绪' : `${data.passed}/${data.required} 项通过`;
+          setupSummaryEl.className = `mt-3 text-2xl font-semibold ${data.ok ? 'text-emerald-300' : 'text-amber-300'}`;
+          setupUpdatedEl.textContent = data.remoteMode
+            ? `当前为局域网监听 ${data.host}:${data.port}，请只在可信网络使用。`
+            : `本机安全模式 ${data.host}:${data.port} · ${new Date(data.collectedAt).toLocaleString()}`;
+          setupListEl.innerHTML = renderMiniRows(data.checks || []);
+        } catch (error) {
+          setupSummaryEl.textContent = '环境检查失败';
+          setupSummaryEl.className = 'mt-3 text-2xl font-semibold text-rose-300';
+          setupUpdatedEl.textContent = error.message;
+        }
       }
 
       async function loadAssurance() {
@@ -1685,6 +1806,8 @@
         loadDiagnostics();
         loadTimeline();
         loadAssurance();
+        loadHealthSummary();
+        loadSetupStatus();
         startUpdatePolling();
         connectRealtime();
       }
@@ -1710,6 +1833,8 @@
         }, 5000);
         setInterval(loadDiagnostics, 60000);
         setInterval(loadTimeline, 60000);
+        setInterval(loadHealthSummary, 60000);
+        setInterval(loadSetupStatus, 300000);
         setInterval(loadAssurance, 120000);
       });
     </script>
