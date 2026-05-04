@@ -38,6 +38,16 @@
       </div>
     </section>
 
+    <div id="api-error-toast" class="fixed right-4 top-4 z-40 hidden max-w-md rounded-lg border border-rose-400/20 bg-rose-950/90 p-4 text-sm shadow-2xl shadow-black/40">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
+          <p id="api-error-title" class="font-semibold text-rose-100">请求失败</p>
+          <p id="api-error-detail" class="mt-1 break-words text-xs leading-5 text-rose-200/75"></p>
+        </div>
+        <button type="button" onclick="hideApiError()" class="shrink-0 text-xs text-rose-200/70 transition hover:text-rose-100">关闭</button>
+      </div>
+    </div>
+
     <main class="min-h-screen">
       <header class="border-b border-white/10 bg-zinc-950/95">
         <div class="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row sm:items-end sm:justify-between lg:px-8">
@@ -489,7 +499,15 @@
             showLogin('登录已失效，请重新登录。');
             throw new Error('Unauthorized');
           }
+          if (!res.ok && url.startsWith('/api/')) {
+            res.clone().json()
+              .then((data) => showApiError(data.message || data.error || '接口请求失败', data.detail || data.reason || `HTTP ${res.status}`))
+              .catch(() => showApiError('接口请求失败', `HTTP ${res.status}`));
+          }
           return res;
+        }).catch((error) => {
+          if (error.message !== 'Unauthorized') showApiError('网络请求失败', error.message);
+          throw error;
         });
       }
 
@@ -502,6 +520,20 @@
         loginScreenEl.classList.add('hidden');
       }
 
+      let apiErrorTimer = null;
+
+      function showApiError(title, detail) {
+        apiErrorTitleEl.textContent = title || '请求失败';
+        apiErrorDetailEl.textContent = detail || '请稍后重试，或检查 dashboard 后端日志。';
+        apiErrorToastEl.classList.remove('hidden');
+        clearTimeout(apiErrorTimer);
+        apiErrorTimer = setTimeout(hideApiError, 7000);
+      }
+
+      function hideApiError() {
+        apiErrorToastEl.classList.add('hidden');
+      }
+
       async function localLogin() {
         localLoginBtn.disabled = true;
         tokenLoginBtn.disabled = true;
@@ -512,6 +544,7 @@
           if (!response.ok || !data.success) throw new Error(data.message || '本机登录失败。');
           hideLogin();
           refreshRuntimeState();
+          connectRealtime();
         } catch (error) {
           loginMessageEl.textContent = error.message || '本机登录失败，请使用访问口令登录。';
           loginScreenEl.classList.remove('hidden');
@@ -543,6 +576,7 @@
           tokenInputEl.value = '';
           hideLogin();
           refreshRuntimeState();
+          connectRealtime();
         } catch (error) {
           loginMessageEl.textContent = error.message || '登录失败。';
         } finally {
@@ -555,12 +589,16 @@
         try {
           await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
         } catch {}
+        closeRealtime();
         showLogin('已退出登录。');
       }
 
       // --- DOM elements ---
       const loginScreenEl = document.getElementById('login-screen');
       const loginMessageEl = document.getElementById('login-message');
+      const apiErrorToastEl = document.getElementById('api-error-toast');
+      const apiErrorTitleEl = document.getElementById('api-error-title');
+      const apiErrorDetailEl = document.getElementById('api-error-detail');
       const localLoginBtn = document.getElementById('local-login-btn');
       const tokenLoginBtn = document.getElementById('token-login-btn');
       const tokenInputEl = document.getElementById('token-input');
@@ -863,6 +901,21 @@
         map.errors.textContent = stats ? stats.errorCount : '-';
       }
 
+      function renderGatewayRunning(isRunning, updateMessage = true) {
+        gatewayStatusEl.textContent = isRunning ? 'Running' : 'Stopped';
+        gatewayStatusEl.className = `text-2xl font-semibold ${
+          isRunning ? 'text-emerald-500' : 'text-rose-500'
+        }`;
+        gatewayDotEl.className = `h-3 w-3 rounded-full ${
+          isRunning ? 'bg-emerald-500' : 'bg-rose-500'
+        }`;
+        if (updateMessage && !isControlRequestActive) {
+          controlMessageEl.textContent = isRunning
+            ? 'Gateway 进程正在运行。'
+            : 'Gateway 进程当前未运行。';
+        }
+      }
+
       function renderUpdateJob(job) {
         job = job || { status: 'idle', running: false, message: '暂无更新任务。', steps: [] };
 
@@ -1063,18 +1116,7 @@
           const data = await response.json();
           const isRunning = Boolean(data.isRunning);
 
-          gatewayStatusEl.textContent = isRunning ? 'Running' : 'Stopped';
-          gatewayStatusEl.className = `text-2xl font-semibold ${
-            isRunning ? 'text-emerald-500' : 'text-rose-500'
-          }`;
-          gatewayDotEl.className = `h-3 w-3 rounded-full ${
-            isRunning ? 'bg-emerald-500' : 'bg-rose-500'
-          }`;
-          if (updateMessage && !isControlRequestActive) {
-            controlMessageEl.textContent = isRunning
-              ? 'Gateway 进程正在运行。'
-              : 'Gateway 进程当前未运行。';
-          }
+          renderGatewayRunning(isRunning, updateMessage);
         } catch (error) {
           gatewayStatusEl.textContent = 'Unknown';
           gatewayStatusEl.className = 'text-2xl font-semibold text-zinc-300';
@@ -1541,6 +1583,85 @@
         loadAudit();
       }
 
+      let realtimeSocket = null;
+      let realtimeReconnectTimer = null;
+      let realtimeConnected = false;
+      let realtimeShouldReconnect = true;
+
+      function renderRealtimeSnapshot(snapshot) {
+        if (!snapshot) return;
+        if (snapshot.gateway) {
+          renderGatewayRunning(Boolean(snapshot.gateway.isRunning), false);
+        }
+        if (snapshot.channels) {
+          renderChannel(feishuStatusEl, feishuDotEl, snapshot.channels.feishu);
+          renderChannel(telegramStatusEl, telegramDotEl, snapshot.channels.telegram);
+          const detail = snapshot.channels.detail || {};
+          if (detail.feishu) {
+            feishuLastSeenEl.textContent = detail.feishu.lastSeenAt
+              ? '最后活动: ' + new Date(detail.feishu.lastSeenAt).toLocaleString()
+              : '';
+            feishuReasonEl.textContent = detail.feishu.reason || '';
+          }
+          if (detail.telegram) {
+            telegramLastSeenEl.textContent = detail.telegram.lastSeenAt
+              ? '最后活动: ' + new Date(detail.telegram.lastSeenAt).toLocaleString()
+              : '';
+            telegramReasonEl.textContent = detail.telegram.reason || '';
+          }
+          channelsUpdatedAtEl.textContent = snapshot.collectedAt
+            ? `实时更新于 ${new Date(snapshot.collectedAt).toLocaleTimeString()}`
+            : `实时更新于 ${new Date().toLocaleTimeString()}`;
+        }
+        if (snapshot.update && snapshot.update.running) {
+          startUpdatePolling();
+        }
+      }
+
+      function connectRealtime() {
+        if (!window.WebSocket || realtimeSocket) return;
+        realtimeShouldReconnect = true;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        realtimeSocket = new WebSocket(`${protocol}//${window.location.host}/ws/events`);
+
+        realtimeSocket.addEventListener('open', () => {
+          realtimeConnected = true;
+          hideApiError();
+        });
+
+        realtimeSocket.addEventListener('message', (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.type === 'snapshot') renderRealtimeSnapshot(payload.data);
+            if (payload.type === 'error') showApiError('实时状态推送异常', payload.message);
+          } catch (error) {
+            showApiError('实时状态解析失败', error.message);
+          }
+        });
+
+        realtimeSocket.addEventListener('close', () => {
+          realtimeConnected = false;
+          realtimeSocket = null;
+          clearTimeout(realtimeReconnectTimer);
+          if (realtimeShouldReconnect) realtimeReconnectTimer = setTimeout(connectRealtime, 3000);
+        });
+
+        realtimeSocket.addEventListener('error', () => {
+          realtimeConnected = false;
+        });
+      }
+
+      function closeRealtime() {
+        realtimeShouldReconnect = false;
+        clearTimeout(realtimeReconnectTimer);
+        realtimeReconnectTimer = null;
+        realtimeConnected = false;
+        if (realtimeSocket) {
+          realtimeSocket.close();
+          realtimeSocket = null;
+        }
+      }
+
       async function boot() {
         try {
           const statusResponse = await fetch('/api/auth/status', { credentials: 'same-origin' });
@@ -1565,6 +1686,7 @@
         loadTimeline();
         loadAssurance();
         startUpdatePolling();
+        connectRealtime();
       }
 
       document.addEventListener('DOMContentLoaded', () => {
@@ -1577,7 +1699,15 @@
           button.addEventListener('click', handleControlClick);
         });
         boot();
-        setInterval(refreshRuntimeState, 5000);
+        setInterval(() => {
+          if (realtimeConnected) {
+            loadMetrics();
+            loadErrors();
+            loadAudit();
+            return;
+          }
+          refreshRuntimeState();
+        }, 5000);
         setInterval(loadDiagnostics, 60000);
         setInterval(loadTimeline, 60000);
         setInterval(loadAssurance, 120000);

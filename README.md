@@ -10,6 +10,7 @@ A local macOS management dashboard for OpenClaw Gateway. It focuses on practical
 - Compatibility self-check for the OpenClaw CLI commands the dashboard depends on.
 - Update preflight checks for version diff, disk space, CLI compatibility, Gateway state, and channel probes.
 - Channel stats, recent errors, operation audit log, and fault timeline.
+- WebSocket realtime push for Gateway and channel state, with polling as a fallback.
 - Memory and disk monitoring for macOS.
 - Read-only configuration health view for channel enablement, allowlist counts, and `blockStreaming`.
 - Log noise muting for known harmless lines such as `bot open_id resolved: unknown`.
@@ -33,14 +34,13 @@ Current guardrails:
 - Security smoke check that blocks shell-string `exec()` usage.
 - Command execution uses `execFile` or `spawn` with argument arrays where system tools are needed.
 - Frontend runtime assets are served locally from `public/assets` and `public/vendor`.
+- Semistandard linting runs in CI.
+- Endpoint smoke tests run against a mocked local OpenClaw CLI fixture.
 
 Known engineering work still planned:
 
-- Split the large `server.js` into focused modules.
-- Add endpoint-level unit tests with mocked OpenClaw CLI responses.
+- Continue splitting domain routes out of `server.js` as the API surface grows.
 - Make OpenClaw binary path discovery configurable across more install locations.
-- Add a unified frontend API error banner/toast pattern.
-- Evaluate WebSocket push for Gateway/channel events after the API surface stabilizes.
 - Keep Linux/Windows support out of scope until OpenClaw Gateway operations are validated there.
 
 Tested locally with OpenClaw `2026.5.3` on macOS. The dashboard includes `/api/compatibility` to check whether the installed OpenClaw CLI exposes the commands and JSON fields it depends on.
@@ -166,10 +166,18 @@ Screenshot export masks these patterns in the exported copy:
 
 ```bash
 npm test
+npm run lint
 npm run build:assets
 npm run check
 npm start
 ```
+
+The server is organized as a route aggregator plus focused support modules under `src/server/`:
+
+- `config.js` for paths, ports, and runtime constants.
+- `runtime.js` for filesystem and system-command helpers.
+- `processes.js` for process/memory display helpers.
+- `realtime.js` for WebSocket state streaming.
 
 ## License
 

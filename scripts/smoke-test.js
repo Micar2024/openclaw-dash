@@ -1,27 +1,29 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const vm = require('vm');
 const { spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const serverPath = path.join(root, 'server.js');
+const configPath = path.join(root, 'src', 'server', 'config.js');
 const htmlPath = path.join(root, 'public', 'index.html');
 const cssPath = path.join(root, 'public', 'assets', 'app.css');
 const html2canvasPath = path.join(root, 'public', 'vendor', 'html2canvas.min.js');
 
-function fail(message) {
+function fail (message) {
   console.error(`Smoke test failed: ${message}`);
   process.exit(1);
 }
 
-function run(command, args) {
+function run (command, args) {
   const result = spawnSync(command, args, { cwd: root, encoding: 'utf8' });
   if (result.status !== 0) {
     fail(`${command} ${args.join(' ')}\n${result.stderr || result.stdout}`);
   }
 }
 
-function request(server, pathname, options = {}) {
+function request (server, pathname, options = {}) {
   const address = server.address();
   return new Promise((resolve, reject) => {
     const req = http.request({
@@ -29,7 +31,7 @@ function request(server, pathname, options = {}) {
       port: address.port,
       path: pathname,
       method: options.method || 'GET',
-      headers: options.headers || {},
+      headers: options.headers || {}
     }, (res) => {
       res.resume();
       res.on('end', () => resolve(res.statusCode));
@@ -40,7 +42,7 @@ function request(server, pathname, options = {}) {
   });
 }
 
-async function runEndpointSmokeTests() {
+async function runEndpointSmokeTests () {
   process.env.DASHBOARD_TOKEN = 'smoke-test-token';
   process.env.DASHBOARD_HOST = '127.0.0.1';
   process.env.DASHBOARD_PORT = '0';
@@ -58,7 +60,7 @@ async function runEndpointSmokeTests() {
     }
 
     const authedStatus = await request(serverInstance, '/api/status', {
-      headers: { Authorization: 'Bearer smoke-test-token' },
+      headers: { Authorization: 'Bearer smoke-test-token' }
     });
     if (authedStatus >= 500) fail(`/api/status should not 5xx with a valid token, got ${authedStatus}.`);
   } finally {
@@ -66,7 +68,7 @@ async function runEndpointSmokeTests() {
   }
 }
 
-async function main() {
+async function main () {
   run(process.execPath, ['--check', serverPath]);
 
   const server = fs.readFileSync(serverPath, 'utf8');
@@ -78,7 +80,7 @@ async function main() {
     fail('server.js should not import child_process.exec.');
   }
 
-  const inferFn = server.match(/function inferLatestChannelStatus\(line\) \{[\s\S]*?\n\}/);
+  const inferFn = server.match(/function inferLatestChannelStatus\s*\(line\) \{[\s\S]*?\n\}/);
   if (!inferFn || !inferFn[0].includes("return 'unknown';")) {
     fail('inferLatestChannelStatus should return unknown when there is no positive or negative signal.');
   }
@@ -95,8 +97,9 @@ async function main() {
     if (!server.includes(`'${route}'`) && !server.includes(`"${route}"`)) fail(`Expected API route missing: ${route}`);
   }
 
+  const config = fs.readFileSync(configPath, 'utf8');
   for (const constantName of ['TOKEN_PATH', 'OPENCLAW_CONFIG_PATH', 'LOG_PATH', 'DASH_VERSION_CACHE_PATH']) {
-    if (!server.includes(`const ${constantName}`)) fail(`Expected config/path constant missing: ${constantName}`);
+    if (!config.includes(`const ${constantName}`)) fail(`Expected config/path constant missing: ${constantName}`);
   }
 
   const html = fs.readFileSync(htmlPath, 'utf8');
@@ -115,7 +118,8 @@ async function main() {
   const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map((match) => match[1]);
   for (const [index, script] of inlineScripts.entries()) {
     try {
-      new Function(script);
+      const parsedScript = new vm.Script(script);
+      if (!parsedScript) fail(`public/index.html inline script #${index + 1} did not parse.`);
     } catch (error) {
       fail(`public/index.html inline script #${index + 1} does not parse: ${error.message}`);
     }
