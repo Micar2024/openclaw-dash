@@ -4,7 +4,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
-const { exec, execFile, spawn } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const path = require('path');
 
 const app = express();
@@ -225,8 +225,42 @@ function appendAudit(req, action, success, detail = {}) {
 
 function readTail(filePath, lines = 200) {
   return new Promise((resolve) => {
-    exec(`tail -n ${lines} "${filePath}" 2>/dev/null`, { timeout: 5000 }, (err, stdout) => {
+    const safeLines = Math.max(1, Math.min(Number(lines) || 200, 20000));
+    execFile('tail', ['-n', String(safeLines), filePath], { timeout: 5000 }, (err, stdout) => {
       resolve(err || !stdout ? '' : stdout);
+    });
+  });
+}
+
+function getDiskInfo() {
+  return new Promise((resolve) => {
+    execFile('df', ['-k', os.homedir()], { timeout: 3000 }, (err, stdout) => {
+      if (err || !stdout.trim()) {
+        resolve({ freeGb: null, usedPercent: null });
+        return;
+      }
+
+      const parts = stdout.trim().split('\n')[1]?.split(/\s+/) || [];
+      const availKb = parseInt(parts[3], 10);
+      const usedPct = parts[4] ? parseInt(parts[4], 10) : null;
+      resolve({
+        freeGb: Number.isFinite(availKb) ? Number((availKb / 1048576).toFixed(1)) : null,
+        usedPercent: usedPct,
+      });
+    });
+  });
+}
+
+function getProcessResourceInfo(pid) {
+  return new Promise((resolve) => {
+    execFile('ps', ['-p', String(pid), '-o', 'etime=,rss='], { timeout: 3000 }, (err, stdout) => {
+      if (err || !stdout.trim()) {
+        resolve(null);
+        return;
+      }
+
+      const parts = stdout.trim().split(/\s+/);
+      resolve({ etime: parts[0] || null, rssKb: parseInt(parts[1], 10) || null });
     });
   });
 }
@@ -507,7 +541,7 @@ function persistLatestReleaseInfo(info) {
 }
 
 app.get('/api/version', (req, res) => {
-  exec(`"${OPENCLAW_BIN}" --version`, { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 5000 }, (error, stdout, stderr) => {
+  execFile(OPENCLAW_BIN, ['--version'], { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 5000 }, (error, stdout, stderr) => {
     if (error) return res.json({ installed: false, version: null, message: '未检测到 openclaw，或执行 openclaw --version 时发生错误。', detail: stderr ? stderr.trim() : error.message });
     res.json({ installed: true, version: stdout.trim() || '未知版本', message: '已检测到本地 openclaw。' });
   });
@@ -515,7 +549,7 @@ app.get('/api/version', (req, res) => {
 
 function getLocalVersion() {
   return new Promise((resolve) => {
-    exec(`"${OPENCLAW_BIN}" --version`, { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 5000 }, (error, stdout) => {
+    execFile(OPENCLAW_BIN, ['--version'], { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 5000 }, (error, stdout) => {
       resolve(error ? null : (stdout.trim() || null));
     });
   });
@@ -603,7 +637,7 @@ function checkGatewayStatus() {
 
 function getGatewayProcesses() {
   return new Promise((resolve) => {
-    exec('ps ax -o pid=,command=', { timeout: 5000 }, (error, stdout) => {
+    execFile('ps', ['ax', '-o', 'pid=,command='], { timeout: 5000 }, (error, stdout) => {
       if (error || !stdout.trim()) { resolve([]); return; }
       const processes = stdout.split(/\r?\n/)
         .map((line) => { const match = line.trim().match(/^(\d+)\s+(.+)$/); return match ? { pid: Number(match[1]), command: match[2] } : null; })
@@ -631,19 +665,12 @@ function inferLatestChannelStatus(line) {
   const lp = lastIdx(pos), ln = lastIdx(neg);
   if (ln >= 0 && ln > lp) return 'offline';
   if (lp >= 0) return 'online';
-  return 'online';
+  return 'unknown';
 }
 
-function getLatestChannelLine(keyword) {
-  return new Promise((resolve) => {
-    exec(`grep -i "${keyword}" "${LOG_PATH}" | grep -E "^[0-9]{4}-[0-9]{2}-[0-9]{2}" | tail -n 1`, { timeout: 5000 }, (error, stdout) => { resolve(error || !stdout.trim() ? '' : stdout.trim()); });
-  });
-}
-
-function getLatestAgentModelLine() {
-  return new Promise((resolve) => {
-    exec(`grep -i "agent model:" "${LOG_PATH}" | tail -n 1`, { timeout: 5000 }, (error, stdout) => { resolve(error || !stdout.trim() ? '' : stdout.trim()); });
-  });
+async function getLatestAgentModelLine() {
+  const content = await readTail(LOG_PATH, CHANNEL_STATS_TAIL_LINES);
+  return content.split(/\r?\n/).reverse().find((line) => /agent model:/i.test(line))?.trim() || '';
 }
 
 function resolveModelMetadata(config, modelId) {
@@ -969,7 +996,10 @@ app.post('/api/diagnostics/probe', async (req, res) => {
 
 function assertOpenClawAvailable() {
   return new Promise((resolve, reject) => {
-    exec(`test -x "${OPENCLAW_BIN}"`, { timeout: 3000 }, (error) => { if (error) reject(new Error(`未检测到 openclaw 命令，请确认 ${OPENCLAW_BIN} 存在且可执行。`)); else resolve(); });
+    fs.access(OPENCLAW_BIN, fs.constants.X_OK, (error) => {
+      if (error) reject(new Error(`未检测到 openclaw 命令，请确认 ${OPENCLAW_BIN} 存在且可执行。`));
+      else resolve();
+    });
   });
 }
 
@@ -1294,22 +1324,20 @@ async function readRecentErrorEntriesWithMeta(maxLines = 1000, maxResults = 10) 
   const muteRules = getActiveLogMuteRules();
   let mutedCount = 0;
   async function readErrorLines(filePath) {
-    return new Promise((resolve) => {
-      exec(`tail -n ${maxLines} "${filePath}" 2>/dev/null`, { timeout: 5000 }, (err, stdout) => {
-        if (err || !stdout.trim()) { resolve([]); return; }
-        const matches = [];
-        for (const line of stdout.split('\n')) {
-          if (!pattern.test(line)) continue;
-          const mutedBy = matchesMutedLogRule(line, muteRules);
-          if (mutedBy) {
-            mutedCount++;
-            continue;
-          }
-          matches.push({ timestamp: extractTimestamp(line), source: path.basename(filePath), message: line.trim().slice(0, 500) });
-        }
-        resolve(matches);
-      });
-    });
+    const stdout = await readTail(filePath, maxLines);
+    if (!stdout.trim()) return [];
+
+    const matches = [];
+    for (const line of stdout.split('\n')) {
+      if (!pattern.test(line)) continue;
+      const mutedBy = matchesMutedLogRule(line, muteRules);
+      if (mutedBy) {
+        mutedCount++;
+        continue;
+      }
+      matches.push({ timestamp: extractTimestamp(line), source: path.basename(filePath), message: line.trim().slice(0, 500) });
+    }
+    return matches;
   }
 
   const errors = [...(await readErrorLines(LOG_PATH)), ...(await readErrorLines(ERR_LOG_PATH))]
@@ -1335,13 +1363,7 @@ app.get('/api/metrics', async (req, res) => {
     if (gwProc) {
       gateway.pid = gwProc.pid; gateway.command = gwProc.command;
       try {
-        const psInfo = await new Promise((resolve) => {
-          exec(`ps -p ${gwProc.pid} -o etime=,rss=`, { timeout: 3000 }, (err, stdout) => {
-            if (err || !stdout.trim()) { resolve(null); return; }
-            const parts = stdout.trim().split(/\s+/);
-            resolve({ etime: parts[0] || null, rssKb: parseInt(parts[1], 10) || null });
-          });
-        });
+        const psInfo = await getProcessResourceInfo(gwProc.pid);
         if (psInfo) {
           gateway.uptime = psInfo.etime; gateway.memoryRssMb = psInfo.rssKb ? Math.round(psInfo.rssKb / 1024) : null;
           const etime = psInfo.etime;
@@ -1366,18 +1388,11 @@ app.get('/api/metrics', async (req, res) => {
       feishu: { ...feishuHealth, stats: feishuStats },
       telegram: { ...telegramHealth, stats: telegramStats },
     };
-    const disk = await new Promise((resolve) => {
-      exec('df -k ~', { timeout: 3000 }, (err, stdout) => {
-        if (err || !stdout.trim()) { resolve({ freeGb: null, usedPercent: null }); return; }
-        const parts = stdout.trim().split('\n')[1]?.split(/\s+/) || [];
-        const availKb = parseInt(parts[3], 10); const usedPct = parts[4] ? parseInt(parts[4], 10) : null;
-        resolve({ freeGb: availKb ? (availKb / 1048576).toFixed(1) : null, usedPercent: usedPct });
-      });
-    });
+    const disk = await getDiskInfo();
     // Memory info (macOS: accurate via vm_stat; page size 16384 on Apple Silicon)
     const [localVersion, latestRelease, model] = await Promise.all([getLocalVersion(), getLatestReleaseInfo(), getCurrentModelInfo()]);
     const memory = await new Promise((resolve) => {
-      exec('vm_stat', { timeout: 5000 }, (err, stdout) => {
+      execFile('vm_stat', [], { timeout: 5000 }, (err, stdout) => {
         if (err) {
           const totalBytes = os.totalmem();
           const freeBytes = os.freemem();
@@ -1598,21 +1613,13 @@ async function buildVersionSourcesHealth() {
 async function buildUpdatePreflight() {
   const [gatewayProcesses, disk, localVersion, latestRelease, compatibility, diagnostics] = await Promise.all([
     getGatewayProcesses(),
-    new Promise((resolve) => {
-      exec('df -k ~', { timeout: 3000 }, (err, stdout) => {
-        if (err || !stdout.trim()) { resolve({ freeGb: null, usedPercent: null, ok: false }); return; }
-        const parts = stdout.trim().split('\n')[1]?.split(/\s+/) || [];
-        const availKb = parseInt(parts[3], 10);
-        const usedPct = parts[4] ? parseInt(parts[4], 10) : null;
-        const freeGb = availKb ? Number((availKb / 1048576).toFixed(1)) : null;
-        resolve({ freeGb, usedPercent: usedPct, ok: freeGb == null ? false : freeGb >= 2 });
-      });
-    }),
+    getDiskInfo(),
     getLocalVersion(),
     getLatestReleaseInfo(),
     buildCompatibilityReport(),
     buildDiagnostics(),
   ]);
+  disk.ok = disk.freeGb == null ? false : disk.freeGb >= 2;
   const updateAvailable = Boolean(parseVersion(localVersion) && parseVersion(latestRelease.latestVersion) && isVersionGreater(latestRelease.latestVersion, localVersion));
   const checks = [
     { name: '版本差异', ok: updateAvailable, detail: updateAvailable ? `${localVersion} → ${latestRelease.latestVersion}` : '当前未检测到可用更新。' },
@@ -1774,13 +1781,22 @@ function aggregateProcesses(processes) {
 
 function getTopMemoryProcesses(limit = 25) {
   return new Promise((resolve) => {
-    exec(`ps aux | awk '{print $6/1024 " MB", $1, $11}' | sort -rn | head -${limit}`, { timeout: 5000 }, (err, stdout) => {
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 25, 100));
+    execFile('ps', ['axo', 'rss=,user=,command='], { timeout: 5000 }, (err, stdout) => {
       if (err || !stdout.trim()) { resolve([]); return; }
-      const processes = stdout.trim().split('\n').map(line => {
-        const parts = line.trim().match(/^([\d.]+)\s+MB\s+(\S+)\s+(.+)$/);
+      const processes = stdout.trim().split('\n').map((line) => {
+        const parts = line.trim().match(/^(\d+)\s+(\S+)\s+(.+)$/);
         if (!parts) return null;
-        return { memMb: parseFloat(parts[1]).toFixed(1), user: parts[2], cmd: parts[3], name: getProcessDisplayName(parts[3]) };
-      }).filter(Boolean);
+        const rssKb = Number(parts[1]);
+        return {
+          memMb: Number.isFinite(rssKb) ? (rssKb / 1024).toFixed(1) : '0.0',
+          user: parts[2],
+          cmd: parts[3],
+          name: getProcessDisplayName(parts[3]),
+        };
+      }).filter(Boolean)
+        .sort((a, b) => parseFloat(b.memMb) - parseFloat(a.memMb))
+        .slice(0, safeLimit);
       resolve(aggregateProcesses(processes));
     });
   });

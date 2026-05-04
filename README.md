@@ -22,6 +22,25 @@ A local macOS management dashboard for OpenClaw Gateway. It focuses on practical
 - OpenClaw CLI installed and available at `~/.npm-global/bin/openclaw` or in PATH
 - OpenClaw configured locally under `~/.openclaw`
 
+## Project Status
+
+This is a macOS-first local operations dashboard. It is suitable for personal OpenClaw Gateway management and is being hardened toward broader community use.
+
+Current guardrails:
+
+- CI smoke test on GitHub Actions.
+- Server syntax check and frontend inline-script parse check.
+- Security smoke check that blocks shell-string `exec()` usage.
+- Command execution uses `execFile` or `spawn` with argument arrays where system tools are needed.
+
+Known engineering work still planned:
+
+- Split the large `server.js` into focused modules.
+- Add endpoint-level unit tests with mocked OpenClaw CLI responses.
+- Bundle frontend assets instead of relying on CDN scripts for Tailwind and html2canvas.
+- Make OpenClaw binary path discovery configurable across more install locations.
+- Keep Linux/Windows support out of scope until OpenClaw Gateway operations are validated there.
+
 ## Quick Start
 
 ```bash
@@ -112,6 +131,7 @@ launchctl kickstart -k gui/$(id -u)/com.openclaw.dashboard
 ## Development
 
 ```bash
+npm test
 npm run check
 npm start
 ```
@@ -119,4 +139,3 @@ npm start
 ## License
 
 MIT
-
