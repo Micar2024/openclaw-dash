@@ -32,12 +32,12 @@ Current guardrails:
 - Server syntax check and frontend inline-script parse check.
 - Security smoke check that blocks shell-string `exec()` usage.
 - Command execution uses `execFile` or `spawn` with argument arrays where system tools are needed.
+- Frontend runtime assets are served locally from `public/assets` and `public/vendor`.
 
 Known engineering work still planned:
 
 - Split the large `server.js` into focused modules.
 - Add endpoint-level unit tests with mocked OpenClaw CLI responses.
-- Bundle frontend assets instead of relying on CDN scripts for Tailwind and html2canvas.
 - Make OpenClaw binary path discovery configurable across more install locations.
 - Keep Linux/Windows support out of scope until OpenClaw Gateway operations are validated there.
 
@@ -66,6 +66,8 @@ Optional environment variables:
 DASHBOARD_HOST=127.0.0.1
 OPENCLAW_GATEWAY_PORT=18789
 DASHBOARD_TOKEN=your-token
+OPENCLAW_DASH_FEISHU_APP_ID=your-feishu-app-id
+OPENCLAW_DASH_FEISHU_APP_SECRET=your-feishu-app-secret
 ```
 
 If `DASHBOARD_TOKEN` is not provided, the app creates a local fallback token at:
@@ -82,6 +84,8 @@ Runtime files are stored under `~/.openclaw`:
 - `dash-log-muted-rules.json`
 
 These files are intentionally not part of the repository.
+
+Feishu direct diagnostics prefer `OPENCLAW_DASH_FEISHU_APP_ID` and `OPENCLAW_DASH_FEISHU_APP_SECRET` when present. If they are not set, the dashboard falls back to the local OpenClaw config and known credential-file shapes for compatibility, but it reports the credential source without exposing secret values.
 
 ## macOS LaunchAgent
 
@@ -132,6 +136,7 @@ launchctl kickstart -k gui/$(id -u)/com.openclaw.dashboard
 
 ```bash
 npm test
+npm run build:assets
 npm run check
 npm start
 ```

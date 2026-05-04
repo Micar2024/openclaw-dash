@@ -707,27 +707,73 @@ function getFeishuSecretPath(config) {
   if (secretRef.source === 'file' && typeof secretRef.id === 'string') {
     const cleanId = secretRef.id.replace(/^\/+/, '');
     const candidate = path.join(os.homedir(), '.openclaw/credentials', `${cleanId}.json`);
-    if (fs.existsSync(candidate)) return candidate;
+    if (fs.existsSync(candidate)) return { path: candidate, source: `openclaw-config:${secretRef.id}` };
   }
-  return path.join(os.homedir(), '.openclaw/credentials/lark.secrets.json');
+
+  const fallback = path.join(os.homedir(), '.openclaw/credentials/lark.secrets.json');
+  return fs.existsSync(fallback) ? { path: fallback, source: 'legacy-lark-secret-file' } : { path: null, source: null };
+}
+
+function getNestedValue(source, keyPath) {
+  return keyPath.split('.').reduce((value, key) => (value && typeof value === 'object' ? value[key] : undefined), source);
+}
+
+function resolveFeishuAppSecret(config) {
+  const envSecret = (process.env.OPENCLAW_DASH_FEISHU_APP_SECRET || '').trim();
+  if (envSecret) {
+    return { value: envSecret, source: 'env:OPENCLAW_DASH_FEISHU_APP_SECRET', schema: 'explicit-env', file: null, warning: null };
+  }
+
+  const configSecret = config.channels?.feishu?.appSecret;
+  if (typeof configSecret === 'string' && configSecret.trim()) {
+    return { value: configSecret.trim(), source: 'openclaw-config:channels.feishu.appSecret', schema: 'literal', file: null, warning: null };
+  }
+
+  const secretLocation = getFeishuSecretPath(config);
+  if (!secretLocation.path) {
+    return { value: null, source: null, schema: null, file: null, warning: '未找到飞书凭据文件；推荐设置 OPENCLAW_DASH_FEISHU_APP_SECRET。' };
+  }
+
+  const secrets = readJsonFile(secretLocation.path) || {};
+  const candidates = [
+    'appSecret',
+    'app_secret',
+    'lark.appSecret',
+    'lark.app_secret',
+    'feishu.appSecret',
+    'feishu.app_secret',
+  ];
+  const matchedPath = candidates.find((candidate) => typeof getNestedValue(secrets, candidate) === 'string' && getNestedValue(secrets, candidate).trim());
+  const value = matchedPath ? getNestedValue(secrets, matchedPath).trim() : null;
+
+  return {
+    value,
+    source: secretLocation.source,
+    schema: matchedPath || null,
+    file: secretLocation.path,
+    warning: value ? null : '飞书凭据文件存在，但未识别到 appSecret；推荐设置 OPENCLAW_DASH_FEISHU_APP_SECRET。',
+  };
 }
 
 function getFeishuCredentials() {
   const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
-  const appId = config.channels?.feishu?.appId || null;
-  const secretFile = getFeishuSecretPath(config);
-  const secrets = readJsonFile(secretFile) || {};
-  const appSecret = secrets.lark?.appSecret || secrets.feishu?.appSecret || secrets.appSecret || null;
+  const envAppId = (process.env.OPENCLAW_DASH_FEISHU_APP_ID || '').trim();
+  const appId = envAppId || config.channels?.feishu?.appId || null;
+  const secret = resolveFeishuAppSecret(config);
 
   return {
     appId,
-    appSecret,
+    appSecret: secret.value,
     domain: config.channels?.feishu?.domain || 'feishu',
     connectionMode: config.channels?.feishu?.connectionMode || null,
     enabled: Boolean(config.channels?.feishu?.enabled),
     blockStreamingConfigured: Object.prototype.hasOwnProperty.call(config.channels?.feishu || {}, 'blockStreaming'),
     blockStreaming: config.channels?.feishu?.blockStreaming,
-    secretFile: appSecret ? path.basename(secretFile) : null,
+    secretFile: secret.file ? path.basename(secret.file) : null,
+    appIdSource: envAppId ? 'env:OPENCLAW_DASH_FEISHU_APP_ID' : 'openclaw-config:channels.feishu.appId',
+    credentialSource: secret.source,
+    credentialSchema: secret.schema,
+    credentialWarning: secret.warning,
   };
 }
 
@@ -736,7 +782,7 @@ async function getFeishuDirectProbe() {
   const baseUrl = creds.domain === 'larksuite' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
 
   if (!creds.enabled) return { ok: false, error: '飞书通道未启用。', appId: creds.appId, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured };
-  if (!creds.appId || !creds.appSecret) return { ok: false, error: '飞书 App ID 或 App Secret 未读取到。', appId: creds.appId, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured };
+  if (!creds.appId || !creds.appSecret) return { ok: false, error: creds.credentialWarning || '飞书 App ID 或 App Secret 未读取到。', appId: creds.appId, appIdSource: creds.appIdSource, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured, credentialSource: creds.credentialSource, credentialSchema: creds.credentialSchema };
 
   try {
     const tokenResponse = await axios.post(`${baseUrl}/open-apis/auth/v3/tenant_access_token/internal`, {
@@ -745,7 +791,7 @@ async function getFeishuDirectProbe() {
     }, { timeout: 8000 });
 
     if (tokenResponse.data?.code !== 0 || !tokenResponse.data?.tenant_access_token) {
-      return { ok: false, error: tokenResponse.data?.msg || 'tenant_access_token 获取失败。', appId: creds.appId, connectionMode: creds.connectionMode };
+      return { ok: false, error: tokenResponse.data?.msg || 'tenant_access_token 获取失败。', appId: creds.appId, appIdSource: creds.appIdSource, connectionMode: creds.connectionMode, credentialSource: creds.credentialSource, credentialSchema: creds.credentialSchema };
     }
 
     const headers = { Authorization: `Bearer ${tokenResponse.data.tenant_access_token}` };
@@ -762,22 +808,28 @@ async function getFeishuDirectProbe() {
       ok: pingOk,
       error: pingOk ? null : (pingError?.response?.data?.msg || pingError?.response?.data?.message || pingError?.message || '飞书 bot ping 失败。'),
       appId: creds.appId,
+      appIdSource: creds.appIdSource,
       botOpenId: botError ? null : botInfo.data?.bot?.open_id || null,
       botName: botError ? null : botInfo.data?.bot?.name || null,
       connectionMode: creds.connectionMode,
       blockStreamingConfigured: creds.blockStreamingConfigured,
       blockStreaming: creds.blockStreaming ?? null,
       secretFile: creds.secretFile,
+      credentialSource: creds.credentialSource,
+      credentialSchema: creds.credentialSchema,
     };
   } catch (error) {
     return {
       ok: false,
       error: error.response?.data?.msg || error.response?.data?.message || error.message,
       appId: creds.appId,
+      appIdSource: creds.appIdSource,
       connectionMode: creds.connectionMode,
       blockStreamingConfigured: creds.blockStreamingConfigured,
       blockStreaming: creds.blockStreaming ?? null,
       secretFile: creds.secretFile,
+      credentialSource: creds.credentialSource,
+      credentialSchema: creds.credentialSchema,
     };
   }
 }

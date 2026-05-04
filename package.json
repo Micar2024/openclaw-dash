@@ -5,8 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js",
-    "test": "node scripts/smoke-test.js",
+    "build:css": "BROWSERSLIST_IGNORE_OLD_DATA=1 tailwindcss -i ./src/styles.css -o ./public/assets/app.css --minify",
+    "build:vendor": "node scripts/prepare-assets.js",
+    "build:assets": "npm run build:css && npm run build:vendor",
+    "check": "node --check server.js && node --check scripts/smoke-test.js && node --check scripts/prepare-assets.js",
+    "test": "npm run build:assets && node scripts/smoke-test.js",
     "lint:security": "node scripts/smoke-test.js"
   },
   "keywords": [
@@ -20,6 +23,10 @@
   "dependencies": {
     "axios": "^1.16.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "html2canvas": "^1.4.1"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
   }
 }
