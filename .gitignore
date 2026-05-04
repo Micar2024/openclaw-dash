@@ -1,0 +1,20 @@
+node_modules/
+logs/
+
+.DS_Store
+.env
+*.log
+*.pid
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local OpenClaw Dash runtime files. The app stores these under ~/.openclaw,
+# but keep them ignored if someone copies them into the repo.
+dash-token
+dash-audit.log
+dash-update-job.json
+dash-version-cache.json
+dash-log-muted-rules.json
+
