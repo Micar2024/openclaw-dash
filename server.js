@@ -8,7 +8,7 @@ const { execFile, spawn } = require('child_process');
 const path = require('path');
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.DASHBOARD_PORT || 3000);
 const ERR_LOG_PATH = path.join(os.homedir(), '.openclaw/logs/gateway.err.log');
 const TOKEN_PATH = path.join(os.homedir(), '.openclaw/dash-token');
 const AUDIT_LOG_PATH = path.join(os.homedir(), '.openclaw/dash-audit.log');
@@ -33,6 +33,7 @@ const DASHBOARD_PATH = [
 const WATCHDOG_INTERVAL_MS = 60 * 1000;
 const CHANNEL_ALERT_INTERVAL_MS = 60 * 1000;
 const CHANNEL_ALERT_AFTER_MS = 5 * 60 * 1000;
+const DASH_VERSION_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CONTROL_ACTIONS = new Set(['start', 'stop', 'restart']);
 const CHANNEL_STATS_TAIL_LINES = 5000;
 const UPDATE_OUTPUT_TAIL_CHARS = 6000;
@@ -48,7 +49,7 @@ const DEFAULT_LOG_MUTE_RULES = [
     enabled: true,
   },
 ];
-let wasRunning = true;
+let wasRunning = null;
 let channelAlertState = {
   feishu: { initialized: false, offlineSince: null, alerted: false },
   telegram: { initialized: false, offlineSince: null, alerted: false },
@@ -272,6 +273,16 @@ function readJsonFile(filePath) {
   } catch { return null; }
 }
 
+function parseDateMs(value) {
+  const ms = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function isFreshTimestamp(value, maxAgeMs) {
+  const ms = parseDateMs(value);
+  return ms != null && Date.now() - ms <= maxAgeMs;
+}
+
 function createDefaultUpdateJob() {
   return {
     id: null,
@@ -296,11 +307,24 @@ function loadPersistedUpdateJob() {
     job.status = 'error';
     job.finishedAt = new Date().toISOString();
     job.message = '看板服务重启，上一轮更新状态未能确认。';
+    job.postUpdateDiagnostics = null;
     job.steps = [...job.steps, {
       name: '看板服务重启',
       status: 'warning',
       detail: '更新任务运行期间 dashboard 进程重启，无法确认该任务是否完整结束。请手动运行升级后复检。',
       timestamp: job.finishedAt,
+    }];
+  }
+
+  const diagnosticsAt = parseDateMs(job.postUpdateDiagnostics?.collectedAt);
+  const finishedAt = parseDateMs(job.finishedAt);
+  if (job.postUpdateDiagnostics && (!diagnosticsAt || (finishedAt && diagnosticsAt < finishedAt))) {
+    job.postUpdateDiagnostics = null;
+    job.steps = [...job.steps, {
+      name: '复检结果已失效',
+      status: 'warning',
+      detail: '持久化的升级后复检时间早于任务结束时间，已忽略旧结果。请重新运行升级后复检。',
+      timestamp: new Date().toISOString(),
     }];
   }
   return job;
@@ -602,7 +626,7 @@ async function getLatestReleaseInfo() {
   }
 
   const dashCached = readJsonFile(DASH_VERSION_CACHE_PATH);
-  if (dashCached?.latestVersion) {
+  if (dashCached?.latestVersion && isFreshTimestamp(dashCached.cachedAt, DASH_VERSION_CACHE_MAX_AGE_MS)) {
     return {
       latestVersion: dashCached.latestVersion,
       releaseUrl: dashCached.releaseUrl || buildReleaseUrl(dashCached.latestVersion),
@@ -1138,9 +1162,23 @@ function sendMacOSAlert(message = 'Gateway 进程意外终止，请前往管理�
 async function runWatchdogCheck() {
   try {
     const isRunning = await checkGatewayStatus();
+    if (wasRunning === null) {
+      wasRunning = isRunning;
+      return;
+    }
     if (!isRunning && wasRunning) { wasRunning = false; await sendMacOSAlert(); return; }
     if (isRunning) wasRunning = true;
   } catch (error) { console.error('[Watchdog] 状态检查失败:', error.message); }
+}
+
+async function initializeWatchdogState() {
+  try {
+    wasRunning = await checkGatewayStatus();
+    console.log(`[Watchdog] 初始 Gateway 状态: ${wasRunning ? 'running' : 'stopped'}`);
+  } catch (error) {
+    wasRunning = null;
+    console.error('[Watchdog] 初始状态读取失败:', error.message);
+  }
 }
 
 async function runChannelWatchdogCheck() {
@@ -1647,12 +1685,15 @@ async function fetchNpmVersionSource() {
 
 function fetchDashCacheVersionSource() {
   const cached = readJsonFile(DASH_VERSION_CACHE_PATH);
+  const fresh = Boolean(cached?.latestVersion && isFreshTimestamp(cached.cachedAt, DASH_VERSION_CACHE_MAX_AGE_MS));
   return {
     name: 'Dash cache',
-    ok: Boolean(cached?.latestVersion),
+    ok: fresh,
     latestVersion: cached?.latestVersion || null,
-    status: cached?.latestVersion ? 'ok' : 'empty',
-    detail: cached?.cachedAt ? `缓存于 ${cached.cachedAt}` : '暂无 dashboard 版本缓存。',
+    status: cached?.latestVersion ? (fresh ? 'ok' : 'stale') : 'empty',
+    detail: cached?.cachedAt
+      ? `缓存于 ${cached.cachedAt}${fresh ? '' : '，已超过 7 天，不再作为版本依据。'}`
+      : '暂无 dashboard 版本缓存。',
   };
 }
 
@@ -1758,13 +1799,19 @@ app.post('/api/log-rules', (req, res) => {
   res.json({ success: true, rules });
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`OpenClaw Dash is running at http://${HOST}:${PORT}`);
-  runWatchdogCheck();
-  runChannelWatchdogCheck();
-  setInterval(runWatchdogCheck, WATCHDOG_INTERVAL_MS);
-  setInterval(runChannelWatchdogCheck, CHANNEL_ALERT_INTERVAL_MS);
-});
+function startDashboard() {
+  return app.listen(PORT, HOST, async () => {
+    console.log(`OpenClaw Dash is running at http://${HOST}:${PORT}`);
+    await initializeWatchdogState();
+    runChannelWatchdogCheck();
+    setInterval(runWatchdogCheck, WATCHDOG_INTERVAL_MS);
+    setInterval(runChannelWatchdogCheck, CHANNEL_ALERT_INTERVAL_MS);
+  });
+}
+
+if (require.main === module) {
+  startDashboard();
+}
 
 // Process memory info
 // Process name mapping → human-readable Chinese
@@ -1853,3 +1900,17 @@ function getTopMemoryProcesses(limit = 25) {
     });
   });
 }
+
+module.exports = {
+  app,
+  startDashboard,
+  isValidDashboardToken,
+  isValidSessionToken,
+  maskableExportPatterns: [
+    'ou_* / cli_* identifiers',
+    'long numeric identifiers',
+    'IPv4 addresses',
+    'PID values',
+    '/Users/* paths',
+  ],
+};

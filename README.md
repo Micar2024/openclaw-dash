@@ -39,7 +39,11 @@ Known engineering work still planned:
 - Split the large `server.js` into focused modules.
 - Add endpoint-level unit tests with mocked OpenClaw CLI responses.
 - Make OpenClaw binary path discovery configurable across more install locations.
+- Add a unified frontend API error banner/toast pattern.
+- Evaluate WebSocket push for Gateway/channel events after the API surface stabilizes.
 - Keep Linux/Windows support out of scope until OpenClaw Gateway operations are validated there.
+
+Tested locally with OpenClaw `2026.5.3` on macOS. The dashboard includes `/api/compatibility` to check whether the installed OpenClaw CLI exposes the commands and JSON fields it depends on.
 
 ## Quick Start
 
@@ -64,6 +68,7 @@ Optional environment variables:
 
 ```bash
 DASHBOARD_HOST=127.0.0.1
+DASHBOARD_PORT=3000
 OPENCLAW_GATEWAY_PORT=18789
 DASHBOARD_TOKEN=your-token
 OPENCLAW_DASH_FEISHU_APP_ID=your-feishu-app-id
@@ -85,7 +90,16 @@ Runtime files are stored under `~/.openclaw`:
 
 These files are intentionally not part of the repository.
 
-Feishu direct diagnostics prefer `OPENCLAW_DASH_FEISHU_APP_ID` and `OPENCLAW_DASH_FEISHU_APP_SECRET` when present. If they are not set, the dashboard falls back to the local OpenClaw config and known credential-file shapes for compatibility, but it reports the credential source without exposing secret values.
+Feishu direct diagnostics prefer `OPENCLAW_DASH_FEISHU_APP_ID` and `OPENCLAW_DASH_FEISHU_APP_SECRET` when present. If they are not set, the dashboard falls back to the local OpenClaw config and known credential-file shapes for compatibility, but it reports the credential source without exposing secret values. Supported credential fields are:
+
+```json
+{
+  "appSecret": "string",
+  "app_secret": "string",
+  "lark": { "appSecret": "string", "app_secret": "string" },
+  "feishu": { "appSecret": "string", "app_secret": "string" }
+}
+```
 
 ## macOS LaunchAgent
 
@@ -131,6 +145,22 @@ launchctl kickstart -k gui/$(id -u)/com.openclaw.dashboard
 - Control actions are limited to OpenClaw Gateway operations and update orchestration.
 - Channel "real verification" sends a test message only after explicit confirmation.
 - Screenshot export masks common private identifiers in the exported copy.
+
+Authentication design:
+
+- All `/api/*` routes require authentication except `/api/auth/*`.
+- Local browser access from `127.0.0.1` can create an HttpOnly session cookie through `/api/auth/local-login`.
+- Remote access requires a bearer token. If `DASHBOARD_TOKEN` is not set, a random token is generated at `~/.openclaw/dash-token` with file mode `0600`.
+- Session cookies are HMAC-SHA256 signed with the dashboard token and checked with `crypto.timingSafeEqual`.
+- Operations are appended to `~/.openclaw/dash-audit.log`.
+
+Screenshot export masks these patterns in the exported copy:
+
+- Feishu/OpenClaw IDs beginning with `ou_` or `cli_`.
+- Long numeric identifiers.
+- IPv4 addresses.
+- `PID: <number>` values.
+- Local `/Users/...` filesystem paths.
 
 ## Development
 

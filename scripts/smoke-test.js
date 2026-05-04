@@ -1,4 +1,5 @@
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
@@ -20,46 +21,108 @@ function run(command, args) {
   }
 }
 
-run(process.execPath, ['--check', serverPath]);
-
-const server = fs.readFileSync(serverPath, 'utf8');
-if (/(?<!\.)\bexec\s*\(/.test(server)) {
-  fail('server.js should use execFile/spawn instead of shell-string exec().');
+function request(server, pathname, options = {}) {
+  const address = server.address();
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1',
+      port: address.port,
+      path: pathname,
+      method: options.method || 'GET',
+      headers: options.headers || {},
+    }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', reject);
+    if (options.body) req.write(options.body);
+    req.end();
+  });
 }
 
-if (/const\s+\{[^}]*\bexec\b[^}]*\}\s*=\s*require\(['"]child_process['"]\)/.test(server)) {
-  fail('server.js should not import child_process.exec.');
-}
+async function runEndpointSmokeTests() {
+  process.env.DASHBOARD_TOKEN = 'smoke-test-token';
+  process.env.DASHBOARD_HOST = '127.0.0.1';
+  process.env.DASHBOARD_PORT = '0';
+  const { app } = require(serverPath);
+  const serverInstance = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => serverInstance.once('listening', resolve));
 
-const inferFn = server.match(/function inferLatestChannelStatus\(line\) \{[\s\S]*?\n\}/);
-if (!inferFn || !inferFn[0].includes("return 'unknown';")) {
-  fail('inferLatestChannelStatus should return unknown when there is no positive or negative signal.');
-}
-
-if (/secrets\.(lark|feishu)\?\.appSecret|secrets\.appSecret/.test(server)) {
-  fail('Feishu secret lookup should use explicit credential resolution rather than inline schema guesses.');
-}
-
-const html = fs.readFileSync(htmlPath, 'utf8');
-if (/https:\/\/cdn\.tailwindcss\.com|https:\/\/cdn\.jsdelivr\.net/i.test(html)) {
-  fail('public/index.html should not depend on external CDN scripts.');
-}
-
-if (!fs.existsSync(cssPath) || fs.statSync(cssPath).size < 1000) {
-  fail('public/assets/app.css is missing or unexpectedly small. Run npm run build:assets.');
-}
-
-if (!fs.existsSync(html2canvasPath) || fs.statSync(html2canvasPath).size < 1000) {
-  fail('public/vendor/html2canvas.min.js is missing or unexpectedly small. Run npm run build:assets.');
-}
-
-const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map((match) => match[1]);
-for (const [index, script] of inlineScripts.entries()) {
   try {
-    new Function(script);
-  } catch (error) {
-    fail(`public/index.html inline script #${index + 1} does not parse: ${error.message}`);
+    const publicAuthStatus = await request(serverInstance, '/api/auth/status');
+    if (publicAuthStatus !== 200) fail(`/api/auth/status should be public, got ${publicAuthStatus}.`);
+
+    for (const route of ['/api/status', '/api/metrics', '/api/update/preflight']) {
+      const status = await request(serverInstance, route);
+      if (status !== 401) fail(`${route} should require authentication, got ${status}.`);
+    }
+
+    const authedStatus = await request(serverInstance, '/api/status', {
+      headers: { Authorization: 'Bearer smoke-test-token' },
+    });
+    if (authedStatus >= 500) fail(`/api/status should not 5xx with a valid token, got ${authedStatus}.`);
+  } finally {
+    await new Promise((resolve) => serverInstance.close(resolve));
   }
 }
 
-console.log('Smoke tests passed.');
+async function main() {
+  run(process.execPath, ['--check', serverPath]);
+
+  const server = fs.readFileSync(serverPath, 'utf8');
+  if (/(?<!\.)\bexec\s*\(/.test(server)) {
+    fail('server.js should use execFile/spawn instead of shell-string exec().');
+  }
+
+  if (/const\s+\{[^}]*\bexec\b[^}]*\}\s*=\s*require\(['"]child_process['"]\)/.test(server)) {
+    fail('server.js should not import child_process.exec.');
+  }
+
+  const inferFn = server.match(/function inferLatestChannelStatus\(line\) \{[\s\S]*?\n\}/);
+  if (!inferFn || !inferFn[0].includes("return 'unknown';")) {
+    fail('inferLatestChannelStatus should return unknown when there is no positive or negative signal.');
+  }
+
+  if (/secrets\.(lark|feishu)\?\.appSecret|secrets\.appSecret/.test(server)) {
+    fail('Feishu secret lookup should use explicit credential resolution rather than inline schema guesses.');
+  }
+
+  if (/(DASHBOARD_TOKEN|APP_SECRET|BOT_TOKEN|ACCESS_TOKEN)\s*=\s*['"][^'"]{12,}/i.test(server)) {
+    fail('Potential hardcoded secret assignment found in server.js.');
+  }
+
+  for (const route of ['/api/status', '/api/metrics', '/api/diagnostics', '/api/update/preflight', '/api/config/health']) {
+    if (!server.includes(`'${route}'`) && !server.includes(`"${route}"`)) fail(`Expected API route missing: ${route}`);
+  }
+
+  for (const constantName of ['TOKEN_PATH', 'OPENCLAW_CONFIG_PATH', 'LOG_PATH', 'DASH_VERSION_CACHE_PATH']) {
+    if (!server.includes(`const ${constantName}`)) fail(`Expected config/path constant missing: ${constantName}`);
+  }
+
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  if (/https:\/\/cdn\.tailwindcss\.com|https:\/\/cdn\.jsdelivr\.net/i.test(html)) {
+    fail('public/index.html should not depend on external CDN scripts.');
+  }
+
+  if (!fs.existsSync(cssPath) || fs.statSync(cssPath).size < 1000) {
+    fail('public/assets/app.css is missing or unexpectedly small. Run npm run build:assets.');
+  }
+
+  if (!fs.existsSync(html2canvasPath) || fs.statSync(html2canvasPath).size < 1000) {
+    fail('public/vendor/html2canvas.min.js is missing or unexpectedly small. Run npm run build:assets.');
+  }
+
+  const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map((match) => match[1]);
+  for (const [index, script] of inlineScripts.entries()) {
+    try {
+      new Function(script);
+    } catch (error) {
+      fail(`public/index.html inline script #${index + 1} does not parse: ${error.message}`);
+    }
+  }
+
+  await runEndpointSmokeTests();
+  console.log('Smoke tests passed.');
+}
+
+main().catch((error) => fail(error.stack || error.message));
