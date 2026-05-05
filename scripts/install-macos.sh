@@ -15,8 +15,11 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 mkdir -p "${HOME}/Library/LaunchAgents" "${ROOT_DIR}/logs"
-npm install
-npm run build:assets
+
+if [[ "${OPENCLAW_DASH_SKIP_NPM_INSTALL:-0}" != "1" ]]; then
+  npm install
+  npm run build:assets
+fi
 
 cat > "${PLIST_PATH}" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -73,6 +73,7 @@ async function main () {
   run(process.execPath, ['--check', serverPath]);
 
   const server = fs.readFileSync(serverPath, 'utf8');
+  const installer = fs.readFileSync(path.join(root, 'install.sh'), 'utf8');
   const channelService = fs.readFileSync(path.join(root, 'src', 'server', 'channel-service.js'), 'utf8');
   const routeSources = fs.readdirSync(routeDir)
     .filter((file) => file.endsWith('.js'))
@@ -98,6 +99,14 @@ async function main () {
 
   if (/(DASHBOARD_TOKEN|APP_SECRET|BOT_TOKEN|ACCESS_TOKEN)\s*=\s*['"][^'"]{12,}/i.test(server)) {
     fail('Potential hardcoded secret assignment found in server.js.');
+  }
+
+  if (/git reset --hard|git checkout -B/.test(installer) || /rm -rf\s+["']?\$DASH_DIR/.test(installer)) {
+    fail('install.sh should not destructively reset or delete the dashboard directory.');
+  }
+
+  if (/cat\s+\$\{HOME\}\/\.openclaw\/dash-token|cat\s+~\/\.openclaw\/dash-token/.test(installer)) {
+    fail('install.sh should not print the dashboard token value.');
   }
 
   for (const route of ['/api/status', '/api/metrics', '/api/diagnostics', '/api/update/preflight', '/api/config/health', '/api/setup/status', '/api/health/summary', '/api/report.md']) {

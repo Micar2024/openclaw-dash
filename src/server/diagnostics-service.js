@@ -235,7 +235,7 @@ function buildRecommendations ({ gatewayRunning, channels, openclawProbe, feishu
   const feishuGatewayProbe = openclawProbe?.channels?.feishu?.probe;
 
   if (!gatewayRunning) {
-    recommendations.push({ level: 'critical', title: 'Gateway 未运行', detail: '先在控制区启动 Gateway，再复查通道与模型状态。' });
+    recommendations.push({ level: 'critical', title: 'Gateway 未运行', detail: '点上方「启动」按钮；如果启动失败，依次排查：① 确认 openclaw 命令可用（openclaw --version）② 检查 ~/.openclaw/openclaw.json 语法（openclaw doctor）③ 检查端口 18789 是否被占用（lsof -i :18789）。' });
   }
 
   if (feishuDirect?.ok && feishuGatewayProbe && feishuGatewayProbe.ok === false) {
@@ -248,11 +248,11 @@ function buildRecommendations ({ gatewayRunning, channels, openclawProbe, feishu
       detail: `当前更像是 OpenClaw/飞书插件运行态或长连接适配问题：${feishuGatewayProbe.error || '未知错误'}。${upgradeHint}`
     });
   } else if (channels?.detail?.feishu?.status === 'offline') {
-    recommendations.push({ level: 'warning', title: '飞书通道离线', detail: channels.detail.feishu.reason || '未检测到近期健康信号。' });
+    recommendations.push({ level: 'warning', title: '飞书通道离线', detail: (channels.detail.feishu.reason || '未检测到近期健康信号。') + ' 排查路径：① 确认网络可访问飞书开放平台（curl -I https://open.feishu.cn）② 检查飞书 appSecret 是否过期 ③ 重启 Gateway 后观察 5 分钟。' });
   }
 
   if (channels?.detail?.telegram?.status === 'offline') {
-    recommendations.push({ level: 'warning', title: 'Telegram 通道离线', detail: channels.detail.telegram.reason || '未检测到近期健康信号。' });
+    recommendations.push({ level: 'warning', title: 'Telegram 通道离线', detail: (channels.detail.telegram.reason || '未检测到近期健康信号。') + ' 排查路径：① 确认 botToken 是否有效 ② 检查 Telegram 服务器状态 ③ 重启 Gateway 后观察 5 分钟。' });
   }
 
   if (version?.updateAvailable) {
@@ -260,11 +260,11 @@ function buildRecommendations ({ gatewayRunning, channels, openclawProbe, feishu
   }
 
   if (!model?.current) {
-    recommendations.push({ level: 'info', title: '未检测到当前模型', detail: '模型信息未能从配置或 Gateway 日志读取，可在下次消息调用后刷新。' });
+    recommendations.push({ level: 'info', title: '未检测到当前模型', detail: '模型信息未能从配置或 Gateway 日志读取。发一条消息给机器人（任意内容），模型信息会在下次消息调用后自动刷新。如果持续无法检测，检查 openclaw.json 中 models.providers 配置是否有语法错误。' });
   }
 
   if (!recommendations.length) {
-    recommendations.push({ level: 'ok', title: '核心状态正常', detail: 'Gateway、通道和模型没有发现新的高优先级异常。' });
+    recommendations.push({ level: 'ok', title: '核心状态正常', detail: 'Gateway、通道和模型没有发现新的高优先级异常。如果体验上仍感觉异常，导出诊断报告到社区求助。' });
   }
 
   return recommendations;

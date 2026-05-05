@@ -1,15 +1,15 @@
-# OpenClaw Dash
+# OpenClaw Dash — 社区诊断工具箱
 
-A local macOS management dashboard for OpenClaw Gateway. It focuses on practical operations: version checks, gateway control, channel health, compatibility diagnostics, update preflight checks, logs, audit events, memory/disk metrics, and privacy-safe dashboard exports.
+A lightweight local diagnostic toolkit for the OpenClaw community. Open the dashboard, export a privacy-masked report, paste it in Discord or your support group, and others can see the facts immediately.
 
 ![OpenClaw Dash overview](docs/images/dashboard-overview.svg)
 
-## Use Cases
+## 使用场景
 
-- Keep a personal OpenClaw Gateway visible after macOS login.
-- Confirm Feishu and Telegram are not merely connected, but recently active and probeable.
-- Run update preflight checks before `openclaw update`.
-- Export a support report or privacy-masked long screenshot when asking others to help diagnose a problem.
+- **「我的 OpenClaw 出问题了，帮我看一下」** — 打开看板，一键导出脱敏诊断报告，贴到社区求助，不用描述版本/配置/报错
+- **升级前先体检** — 运行更新预检，确认磁盘空间、CLI 兼容性、通道在线状态，防止升级翻车
+- **日常健康巡检** — 看一眼健康评分，确认 Gateway 运行时长、飞书/Telegram 是否在线、有没有积压错误
+- **自检配置** — 只读查看通道启用状态、allowlist、blockStreaming 等配置健康度
 
 ## Features
 
@@ -60,6 +60,18 @@ Tested locally with OpenClaw `2026.5.3` on macOS. The dashboard includes `/api/c
 
 ## Quick Start
 
+**一行命令安装（macOS）：**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Micar2024/openclaw-dash/main/install.sh | bash
+```
+
+完成后打开 `http://127.0.0.1:3000`。首次运行向导会引导你完成设置。
+
+安装脚本会检测 Node.js，下载或更新源码，安装依赖，构建本地前端资源，并写入 macOS LaunchAgent。它不会覆盖已有本地改动；如果 `~/openclaw-dash` 不是 git 仓库，会先备份再安装。
+
+**手动安装：**
+
 ```bash
 git clone https://github.com/Micar2024/openclaw-dash.git
 cd openclaw-dash
@@ -67,21 +79,31 @@ npm install
 npm start
 ```
 
-Then open:
+然后打开 `http://127.0.0.1:3000`。
 
-```text
-http://127.0.0.1:3000
-```
-
-The dashboard binds to `127.0.0.1` by default. Local browser access can sign in without manually reading the token. Remote access requires the dashboard token.
-
-For a one-command macOS login item install:
+**装为 macOS 登录项（手动安装后）：**
 
 ```bash
-./scripts/install-macos.sh
+bash scripts/install-macos.sh
 ```
 
-This installs dependencies, builds local frontend assets, writes `~/Library/LaunchAgents/com.openclaw.dashboard.plist`, and starts the dashboard service.
+自动安装依赖、编译前端资源、写入 LaunchAgent 并启动服务。
+
+（一行命令安装已包含此步骤，无需单独执行。）
+
+**遇到问题了？** 打开看板 → 点击「导出报告」→ 把 Markdown 报告贴到社区。报告已自动脱敏，包含版本、Gateway 状态、通道健康、系统资源、近期错误和诊断建议。
+
+## 诊断原则
+
+OpenClaw Dash 的主线不是替代 OpenClaw，也不是做重型监控平台，而是生成一份社区能读懂的标准诊断报告。
+
+数据源按稳定性分层：
+
+- **第一层：本机事实** — Gateway 进程、日志文件、磁盘、内存、macOS、Node.js。这些不依赖 Gateway 是否正常。
+- **第二层：OpenClaw 基础 CLI** — `openclaw --version`、`openclaw doctor` 等用于补充版本和兼容性。
+- **第三层：OpenClaw JSON/探针能力** — 通道 probe、模型运行态等增强信息。失败时不会阻止报告生成。
+
+因此即使 Gateway 已经挂掉，Dashboard 也应该能导出半份有用报告：进程不在、最后日志时间、近期错误、系统状态、只读配置健康和版本线索。
 
 ## Configuration
 
@@ -164,6 +186,36 @@ cp com.openclaw.dashboard.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.openclaw.dashboard.plist
 launchctl kickstart -k gui/$(id -u)/com.openclaw.dashboard
 ```
+
+## 常见问题排查
+
+### Gateway 无法启动
+
+1. 终端跑 `openclaw --version`，确认 CLI 可用
+2. 检查端口 18789 是否被占用：`lsof -i :18789`
+3. 检查 `~/.openclaw/openclaw.json` 是否有语法错误：`openclaw doctor`
+4. 从看板导出诊断报告去 [OpenClaw Discord](https://discord.com/invite/clawd) 求助
+
+### 飞书/Telegram 离线
+
+1. 等 5 分钟（Gateway 重连有缓冲区）
+2. 确认网络正常：`curl -I https://open.feishu.cn`
+3. 重启 Gateway（看板控制区点「重启」按钮）
+4. 如果飞书一直离线，检查应用后台 appSecret 是否过期
+5. 导出诊断报告，看「近期错误」面板是否有飞书/Telegram 相关报错
+
+### 健康评分持续偏低
+
+- 确认所有通道在线
+- 检查近期错误面板是否有积压异常
+- 运行一次自检（看板「健康诊断」面板的「运行探测」按钮）
+- 截图导出（已自动脱敏）去社区求助
+
+### 更新后看板异常
+
+- 看板自身的启动日志在 `~/openclaw-dash/logs/dashboard.err.log`
+- 确认 Node.js 版本 ≥18：`node -v`
+- 重新安装：`curl -fsSL https://raw.githubusercontent.com/Micar2024/openclaw-dash/main/install.sh | bash` 会自动更新
 
 ## Safety Notes
 
