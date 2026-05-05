@@ -207,6 +207,8 @@ The server is organized as a route aggregator plus focused support modules under
 - `runtime.js` for filesystem and system-command helpers.
 - `processes.js` for process/memory display helpers.
 - `realtime.js` for WebSocket state streaming.
+- `version-service.js` for local/upstream version checks and version source health.
+- `diagnostics-service.js` for model detection, OpenClaw probes, compatibility checks, Feishu direct diagnostics, and config health.
 - `reports.js` for Markdown report rendering.
 - `timeline.js` for fault timeline aggregation.
 - `routes/auth.js` for authentication endpoints.

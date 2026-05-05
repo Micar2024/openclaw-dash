@@ -12,8 +12,6 @@ const {
   CHANNEL_ALERT_INTERVAL_MS,
   CHANNEL_STATS_TAIL_LINES,
   CONTROL_ACTIONS,
-  DASH_VERSION_CACHE_MAX_AGE_MS,
-  DASH_VERSION_CACHE_PATH,
   DASHBOARD_PATH,
   DEFAULT_LOG_MUTE_RULES,
   ERR_LOG_PATH,
@@ -26,7 +24,6 @@ const {
   SESSION_COOKIE,
   SESSION_MAX_AGE_MS,
   TOKEN_PATH,
-  UPDATE_CHECK_PATH,
   UPDATE_JOB_PATH,
   UPDATE_OUTPUT_TAIL_CHARS,
   WATCHDOG_INTERVAL_MS
@@ -35,7 +32,6 @@ const {
   ensureParentDir,
   getDiskInfo,
   getProcessResourceInfo,
-  isFreshTimestamp,
   parseDateMs,
   readJsonFile,
   readTail
@@ -44,6 +40,23 @@ const { getTopMemoryProcesses } = require('./src/server/processes');
 const { attachRealtimeServer } = require('./src/server/realtime');
 const { buildMarkdownReport } = require('./src/server/reports');
 const { buildTimeline } = require('./src/server/timeline');
+const {
+  buildVersionSourcesHealth,
+  getLatestReleaseInfo,
+  getLocalVersion,
+  getLocalVersionStatus,
+  isVersionGreater,
+  parseVersion
+} = require('./src/server/version-service');
+const {
+  buildCompatibilityReport,
+  buildConfigHealth,
+  createDiagnosticsService,
+  getCachedOpenClawChannelProbe,
+  getCurrentModelInfo,
+  getFeishuCredentials,
+  runCommandCheck
+} = require('./src/server/diagnostics-service');
 const { registerAuthRoutes } = require('./src/server/routes/auth');
 const { registerChannelRoutes } = require('./src/server/routes/channels');
 const { registerDiagnosticsRoutes } = require('./src/server/routes/diagnostics');
@@ -62,7 +75,6 @@ const channelAlertState = {
   feishu: { initialized: false, offlineSince: null, alerted: false },
   telegram: { initialized: false, offlineSince: null, alerted: false }
 };
-let channelProbeCache = { value: null, expiresAt: 0, promise: null };
 let updateJob = loadPersistedUpdateJob();
 
 app.use(cors());
@@ -281,23 +293,6 @@ function matchesMutedLogRule (line, rules = getActiveLogMuteRules()) {
   }) || null;
 }
 
-function execJsonFile (file, args, timeoutMs = 15000) {
-  return new Promise((resolve) => {
-    execFile(file, args, { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: timeoutMs }, (error, stdout, stderr) => {
-      if (error) {
-        resolve({ ok: false, error: (stderr || stdout || error.message).trim(), data: null });
-        return;
-      }
-
-      try {
-        resolve({ ok: true, error: null, data: JSON.parse(stdout.trim()) });
-      } catch (parseError) {
-        resolve({ ok: false, error: `JSON 解析失败：${parseError.message}`, data: null, raw: stdout.trim().slice(-1000) });
-      }
-    });
-  });
-}
-
 function extractTimestamp (line) {
   if (!line) return null;
   const match = line.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
@@ -488,158 +483,6 @@ async function getChannelMessageStats (channel) {
   return { todayMessages, lastHourMessages, errorCount, windowLines: lines.length };
 }
 
-function normalizeVersion (value) {
-  if (!value) return null;
-  const match = String(value).match(/v?(\d{4}\.\d{1,2}\.\d{1,2})/i);
-  return match ? match[1] : String(value).replace(/^v/i, '').trim();
-}
-
-function parseVersion (value) {
-  const text = String(value || '');
-  const match = text.match(/v?(\d{4})\.(\d{1,2})\.(\d{1,2})(?:-([0-9a-z.-]+))?/i);
-  if (!match) return null;
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    prerelease: match[4] || '',
-    raw: match[0]
-  };
-}
-
-function compareVersions (a, b) {
-  const av = parseVersion(a);
-  const bv = parseVersion(b);
-  if (!av && !bv) return 0;
-  if (!av) return -1;
-  if (!bv) return 1;
-  for (const key of ['major', 'minor', 'patch']) {
-    if (av[key] !== bv[key]) return av[key] - bv[key];
-  }
-
-  function suffixRank (suffix) {
-    if (!suffix) return { type: 0, value: 0, text: '' };
-    if (/^\d+$/.test(suffix)) return { type: 1, value: Number(suffix), text: suffix };
-    return { type: -1, value: 0, text: suffix };
-  }
-
-  const as = suffixRank(av.prerelease);
-  const bs = suffixRank(bv.prerelease);
-  if (as.type !== bs.type) return as.type - bs.type;
-  if (as.value !== bs.value) return as.value - bs.value;
-  return as.text.localeCompare(bs.text, undefined, { numeric: true });
-}
-
-function isVersionGreater (latest, local) {
-  return compareVersions(latest, local) > 0;
-}
-
-function buildReleaseUrl (version) {
-  return version ? `https://github.com/openclaw/openclaw/releases/tag/v${normalizeVersion(version)}` : null;
-}
-
-function persistLatestReleaseInfo (info) {
-  if (!info?.latestVersion || info.source?.includes('cache')) return info;
-  try {
-    ensureParentDir(DASH_VERSION_CACHE_PATH);
-    fs.writeFileSync(DASH_VERSION_CACHE_PATH, `${JSON.stringify({ ...info, cachedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
-  } catch (error) {
-    console.error('[Version] 版本缓存写入失败:', error.message);
-  }
-  return info;
-}
-
-function getLocalVersionStatus () {
-  return new Promise((resolve) => {
-    execFile(OPENCLAW_BIN, ['--version'], { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 5000 }, (error, stdout, stderr) => {
-      if (error) {
-        resolve({
-          installed: false,
-          version: null,
-          message: '未检测到 openclaw，或执行 openclaw --version 时发生错误。',
-          detail: stderr ? stderr.trim() : error.message
-        });
-        return;
-      }
-      resolve({ installed: true, version: stdout.trim() || '未知版本', message: '已检测到本地 openclaw。' });
-    });
-  });
-}
-
-function getLocalVersion () {
-  return new Promise((resolve) => {
-    execFile(OPENCLAW_BIN, ['--version'], { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 5000 }, (error, stdout) => {
-      resolve(error ? null : (stdout.trim() || null));
-    });
-  });
-}
-
-async function getLatestReleaseInfo () {
-  let githubError = null;
-  try {
-    const response = await axios.get('https://api.github.com/repos/openclaw/openclaw/releases', {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openclaw-dash' },
-      params: { per_page: 20 },
-      timeout: 8000
-    });
-
-    const releases = Array.isArray(response.data) ? response.data.filter((release) => !release.draft) : [];
-    const stable = releases.filter((release) => !release.prerelease);
-    const candidates = stable.length ? stable : releases;
-    const latest = candidates
-      .filter((release) => parseVersion(release.tag_name))
-      .sort((a, b) => compareVersions(b.tag_name, a.tag_name))[0];
-
-    if (latest?.tag_name) {
-      return persistLatestReleaseInfo({
-        latestVersion: latest.tag_name,
-        releaseUrl: latest.html_url || buildReleaseUrl(latest.tag_name),
-        publishedAt: latest.published_at || null,
-        source: stable.length ? 'github-releases' : 'github-releases-prerelease'
-      });
-    }
-  } catch (error) {
-    githubError = error.response?.data?.message || error.message;
-  }
-
-  try {
-    const response = await axios.get('https://registry.npmjs.org/openclaw/latest', {
-      headers: { Accept: 'application/json', 'User-Agent': 'openclaw-dash' },
-      timeout: 8000
-    });
-    const npmVersion = response.data?.version || null;
-    if (npmVersion) {
-      return persistLatestReleaseInfo({
-        latestVersion: `v${npmVersion}`,
-        releaseUrl: buildReleaseUrl(npmVersion),
-        publishedAt: response.data?.time || null,
-        source: githubError ? `npm-registry (github: ${githubError})` : 'npm-registry'
-      });
-    }
-  } catch (error) {
-    // Keep falling through to OpenClaw's local cache.
-  }
-
-  const dashCached = readJsonFile(DASH_VERSION_CACHE_PATH);
-  if (dashCached?.latestVersion && isFreshTimestamp(dashCached.cachedAt, DASH_VERSION_CACHE_MAX_AGE_MS)) {
-    return {
-      latestVersion: dashCached.latestVersion,
-      releaseUrl: dashCached.releaseUrl || buildReleaseUrl(dashCached.latestVersion),
-      publishedAt: dashCached.publishedAt || dashCached.cachedAt || null,
-      source: 'dash-version-cache'
-    };
-  }
-
-  const cached = readJsonFile(UPDATE_CHECK_PATH);
-  const cachedVersion = cached?.lastAvailableVersion || cached?.lastNotifiedVersion || null;
-  return {
-    latestVersion: cachedVersion ? `v${normalizeVersion(cachedVersion)}` : null,
-    releaseUrl: cachedVersion ? buildReleaseUrl(cachedVersion) : null,
-    publishedAt: cached?.lastCheckedAt || null,
-    source: cachedVersion ? 'update-check-cache' : 'unavailable'
-  };
-}
-
 function checkGatewayStatus () {
   return getGatewayProcesses().then((processes) => processes.length > 0);
 }
@@ -670,199 +513,6 @@ function inferLatestChannelStatus (line) {
   if (ln >= 0 && ln > lp) return 'offline';
   if (lp >= 0) return 'online';
   return 'unknown';
-}
-
-async function getLatestAgentModelLine () {
-  const content = await readTail(LOG_PATH, CHANNEL_STATS_TAIL_LINES);
-  return content.split(/\r?\n/).reverse().find((line) => /agent model:/i.test(line))?.trim() || '';
-}
-
-function resolveModelMetadata (config, modelId) {
-  if (!config || !modelId) return {};
-  const provider = modelId.includes('/') ? modelId.split('/')[0] : null;
-  const shortId = provider ? modelId.slice(provider.length + 1) : modelId;
-  const providerConfig = provider ? config.models?.providers?.[provider] : null;
-  const providerModels = Array.isArray(providerConfig?.models) ? providerConfig.models : [];
-  const modelMeta = providerModels.find((m) => m.id === shortId || m.id === modelId) || {};
-  const configuredAlias = config.agents?.defaults?.models?.[modelId]?.alias || null;
-  return { provider, id: modelId, name: modelMeta.name || shortId || modelId, alias: configuredAlias, contextWindow: modelMeta.contextWindow || null, maxTokens: modelMeta.maxTokens || null, reasoning: typeof modelMeta.reasoning === 'boolean' ? modelMeta.reasoning : null, input: Array.isArray(modelMeta.input) ? modelMeta.input : [] };
-}
-
-async function getCurrentModelInfo () {
-  const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
-  const defaultModel = config.agents?.defaults?.model?.primary || null;
-  const fallbacks = Array.isArray(config.agents?.defaults?.model?.fallbacks) ? config.agents.defaults.model.fallbacks : [];
-  const imageModel = config.agents?.defaults?.imageModel?.primary || null;
-  const latestModelLine = await getLatestAgentModelLine();
-  const runtimeModel = latestModelLine.match(/agent model:\s*([^\s]+)/i)?.[1] || null;
-  const current = runtimeModel || defaultModel;
-  const metadata = resolveModelMetadata(config, current);
-  return { current, configuredPrimary: defaultModel, runtimeModel, provider: metadata.provider || null, name: metadata.name || current, alias: metadata.alias || null, fallbacks, imageModel, contextWindow: metadata.contextWindow || null, maxTokens: metadata.maxTokens || null, reasoning: metadata.reasoning, input: metadata.input || [], lastSeenAt: extractTimestamp(latestModelLine), source: runtimeModel ? 'gateway.log' : 'config' };
-}
-
-async function runOpenClawChannelProbe () {
-  const result = await execJsonFile(OPENCLAW_BIN, ['channels', 'status', '--probe', '--json'], 35000);
-  if (!result.ok) return { ok: false, error: result.error, channels: {} };
-  return { ok: true, error: null, ...result.data };
-}
-
-async function getCachedOpenClawChannelProbe (force = false) {
-  const now = Date.now();
-  if (!force && channelProbeCache.value && channelProbeCache.expiresAt > now) return channelProbeCache.value;
-  if (!force && channelProbeCache.promise) return channelProbeCache.promise;
-
-  channelProbeCache.promise = runOpenClawChannelProbe()
-    .then((probe) => {
-      channelProbeCache = {
-        value: probe,
-        expiresAt: Date.now() + 15000,
-        promise: null
-      };
-      return probe;
-    })
-    .catch((error) => {
-      const probe = { ok: false, error: error.message, channels: {} };
-      channelProbeCache = {
-        value: probe,
-        expiresAt: Date.now() + 5000,
-        promise: null
-      };
-      return probe;
-    });
-
-  return channelProbeCache.promise;
-}
-
-function getFeishuSecretPath (config) {
-  const secretRef = config.channels?.feishu?.appSecret || {};
-  if (secretRef.source === 'file' && typeof secretRef.id === 'string') {
-    const cleanId = secretRef.id.replace(/^\/+/, '');
-    const candidate = path.join(os.homedir(), '.openclaw/credentials', `${cleanId}.json`);
-    if (fs.existsSync(candidate)) return { path: candidate, source: `openclaw-config:${secretRef.id}` };
-  }
-
-  const fallback = path.join(os.homedir(), '.openclaw/credentials/lark.secrets.json');
-  return fs.existsSync(fallback) ? { path: fallback, source: 'legacy-lark-secret-file' } : { path: null, source: null };
-}
-
-function getNestedValue (source, keyPath) {
-  return keyPath.split('.').reduce((value, key) => (value && typeof value === 'object' ? value[key] : undefined), source);
-}
-
-function resolveFeishuAppSecret (config) {
-  const envSecret = (process.env.OPENCLAW_DASH_FEISHU_APP_SECRET || '').trim();
-  if (envSecret) {
-    return { value: envSecret, source: 'env:OPENCLAW_DASH_FEISHU_APP_SECRET', schema: 'explicit-env', file: null, warning: null };
-  }
-
-  const configSecret = config.channels?.feishu?.appSecret;
-  if (typeof configSecret === 'string' && configSecret.trim()) {
-    return { value: configSecret.trim(), source: 'openclaw-config:channels.feishu.appSecret', schema: 'literal', file: null, warning: null };
-  }
-
-  const secretLocation = getFeishuSecretPath(config);
-  if (!secretLocation.path) {
-    return { value: null, source: null, schema: null, file: null, warning: '未找到飞书凭据文件；推荐设置 OPENCLAW_DASH_FEISHU_APP_SECRET。' };
-  }
-
-  const secrets = readJsonFile(secretLocation.path) || {};
-  const candidates = [
-    'appSecret',
-    'app_secret',
-    'lark.appSecret',
-    'lark.app_secret',
-    'feishu.appSecret',
-    'feishu.app_secret'
-  ];
-  const matchedPath = candidates.find((candidate) => typeof getNestedValue(secrets, candidate) === 'string' && getNestedValue(secrets, candidate).trim());
-  const value = matchedPath ? getNestedValue(secrets, matchedPath).trim() : null;
-
-  return {
-    value,
-    source: secretLocation.source,
-    schema: matchedPath || null,
-    file: secretLocation.path,
-    warning: value ? null : '飞书凭据文件存在，但未识别到 appSecret；推荐设置 OPENCLAW_DASH_FEISHU_APP_SECRET。'
-  };
-}
-
-function getFeishuCredentials () {
-  const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
-  const envAppId = (process.env.OPENCLAW_DASH_FEISHU_APP_ID || '').trim();
-  const appId = envAppId || config.channels?.feishu?.appId || null;
-  const secret = resolveFeishuAppSecret(config);
-
-  return {
-    appId,
-    appSecret: secret.value,
-    domain: config.channels?.feishu?.domain || 'feishu',
-    connectionMode: config.channels?.feishu?.connectionMode || null,
-    enabled: Boolean(config.channels?.feishu?.enabled),
-    blockStreamingConfigured: Object.prototype.hasOwnProperty.call(config.channels?.feishu || {}, 'blockStreaming'),
-    blockStreaming: config.channels?.feishu?.blockStreaming,
-    secretFile: secret.file ? path.basename(secret.file) : null,
-    appIdSource: envAppId ? 'env:OPENCLAW_DASH_FEISHU_APP_ID' : 'openclaw-config:channels.feishu.appId',
-    credentialSource: secret.source,
-    credentialSchema: secret.schema,
-    credentialWarning: secret.warning
-  };
-}
-
-async function getFeishuDirectProbe () {
-  const creds = getFeishuCredentials();
-  const baseUrl = creds.domain === 'larksuite' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
-
-  if (!creds.enabled) return { ok: false, error: '飞书通道未启用。', appId: creds.appId, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured };
-  if (!creds.appId || !creds.appSecret) return { ok: false, error: creds.credentialWarning || '飞书 App ID 或 App Secret 未读取到。', appId: creds.appId, appIdSource: creds.appIdSource, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured, credentialSource: creds.credentialSource, credentialSchema: creds.credentialSchema };
-
-  try {
-    const tokenResponse = await axios.post(`${baseUrl}/open-apis/auth/v3/tenant_access_token/internal`, {
-      app_id: creds.appId,
-      app_secret: creds.appSecret
-    }, { timeout: 8000 });
-
-    if (tokenResponse.data?.code !== 0 || !tokenResponse.data?.tenant_access_token) {
-      return { ok: false, error: tokenResponse.data?.msg || 'tenant_access_token 获取失败。', appId: creds.appId, appIdSource: creds.appIdSource, connectionMode: creds.connectionMode, credentialSource: creds.credentialSource, credentialSchema: creds.credentialSchema };
-    }
-
-    const headers = { Authorization: `Bearer ${tokenResponse.data.tenant_access_token}` };
-    const [botInfo, ping] = await Promise.all([
-      axios.get(`${baseUrl}/open-apis/bot/v3/info`, { headers, timeout: 8000 }).catch((error) => ({ error })),
-      axios.post(`${baseUrl}/open-apis/bot/v1/openclaw_bot/ping`, {}, { headers, timeout: 8000 }).catch((error) => ({ error }))
-    ]);
-
-    const botError = botInfo.error;
-    const pingError = ping.error;
-    const pingOk = !pingError && ping.data?.code === 0;
-
-    return {
-      ok: pingOk,
-      error: pingOk ? null : (pingError?.response?.data?.msg || pingError?.response?.data?.message || pingError?.message || '飞书 bot ping 失败。'),
-      appId: creds.appId,
-      appIdSource: creds.appIdSource,
-      botOpenId: botError ? null : botInfo.data?.bot?.open_id || null,
-      botName: botError ? null : botInfo.data?.bot?.name || null,
-      connectionMode: creds.connectionMode,
-      blockStreamingConfigured: creds.blockStreamingConfigured,
-      blockStreaming: creds.blockStreaming ?? null,
-      secretFile: creds.secretFile,
-      credentialSource: creds.credentialSource,
-      credentialSchema: creds.credentialSchema
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error.response?.data?.msg || error.response?.data?.message || error.message,
-      appId: creds.appId,
-      appIdSource: creds.appIdSource,
-      connectionMode: creds.connectionMode,
-      blockStreamingConfigured: creds.blockStreamingConfigured,
-      blockStreaming: creds.blockStreaming ?? null,
-      secretFile: creds.secretFile,
-      credentialSource: creds.credentialSource,
-      credentialSchema: creds.credentialSchema
-    };
-  }
 }
 
 function getTelegramCredentials () {
@@ -943,88 +593,20 @@ async function verifyChannel (channel) {
   throw new Error('仅支持 feishu 或 telegram。');
 }
 
-function buildRecommendations ({ gatewayRunning, channels, openclawProbe, feishuDirect, model, version }) {
-  const recommendations = [];
-  const feishuGatewayProbe = openclawProbe?.channels?.feishu?.probe;
-
-  if (!gatewayRunning) {
-    recommendations.push({ level: 'critical', title: 'Gateway 未运行', detail: '先在控制区启动 Gateway，再复查通道与模型状态。' });
-  }
-
-  if (feishuDirect?.ok && feishuGatewayProbe && feishuGatewayProbe.ok === false) {
-    const upgradeHint = version?.updateAvailable
-      ? `当前有新版本 ${version.latest}，建议先升级后复检；5.3 系列包含飞书 SDK 路径修复。`
-      : '可等待插件更新，或更新后重启 Gateway 再复检。';
-    recommendations.push({
-      level: 'warning',
-      title: '飞书 API 正常，但 Gateway 探针失败',
-      detail: `当前更像是 OpenClaw/飞书插件运行态或长连接适配问题：${feishuGatewayProbe.error || '未知错误'}。${upgradeHint}`
-    });
-  } else if (channels?.detail?.feishu?.status === 'offline') {
-    recommendations.push({ level: 'warning', title: '飞书通道离线', detail: channels.detail.feishu.reason || '未检测到近期健康信号。' });
-  }
-
-  if (channels?.detail?.telegram?.status === 'offline') {
-    recommendations.push({ level: 'warning', title: 'Telegram 通道离线', detail: channels.detail.telegram.reason || '未检测到近期健康信号。' });
-  }
-
-  if (version?.updateAvailable) {
-    recommendations.push({ level: 'info', title: 'OpenClaw 有新版本', detail: `本地 ${version.local || '-'}，最新 ${version.latest || '-'}。建议在空闲时段执行更新。` });
-  }
-
-  if (!model?.current) {
-    recommendations.push({ level: 'info', title: '未检测到当前模型', detail: '模型信息未能从配置或 Gateway 日志读取，可在下次消息调用后刷新。' });
-  }
-
-  if (!recommendations.length) {
-    recommendations.push({ level: 'ok', title: '核心状态正常', detail: 'Gateway、通道和模型没有发现新的高优先级异常。' });
-  }
-
-  return recommendations;
-}
-
-async function buildDiagnostics () {
-  const [gatewayProcesses, openclawProbe, feishuDirect, localVersion, latestRelease, model] = await Promise.all([
-    getGatewayProcesses(),
-    getCachedOpenClawChannelProbe(true),
-    getFeishuDirectProbe(),
-    getLocalVersion(),
-    getLatestReleaseInfo(),
-    getCurrentModelInfo()
-  ]);
-  const channels = await checkChannelsStatus(openclawProbe);
-  const version = {
-    local: localVersion,
-    latest: latestRelease.latestVersion,
-    updateAvailable: Boolean(parseVersion(localVersion) && parseVersion(latestRelease.latestVersion) && isVersionGreater(latestRelease.latestVersion, localVersion)),
-    releaseUrl: latestRelease.releaseUrl,
-    source: latestRelease.source
-  };
-
-  return {
-    collectedAt: new Date().toISOString(),
-    gateway: { isRunning: gatewayProcesses.length > 0, processes: gatewayProcesses },
-    channels,
-    openclawProbe,
-    feishuDirect,
-    model,
-    version,
-    recommendations: buildRecommendations({
-      gatewayRunning: gatewayProcesses.length > 0,
-      channels,
-      openclawProbe,
-      feishuDirect,
-      model,
-      version
-    })
-  };
-}
-
 async function checkChannelsStatus (probe = null) {
   const channelProbe = probe || await getCachedOpenClawChannelProbe();
   const [feishu, telegram] = await Promise.all([getChannelHealth('feishu', channelProbe), getChannelHealth('telegram', channelProbe)]);
   return { feishu: feishu.status, telegram: telegram.status, detail: { feishu, telegram } };
 }
+
+const { buildDiagnostics } = createDiagnosticsService({
+  checkChannelsStatus,
+  getGatewayProcesses,
+  getLatestReleaseInfo,
+  getLocalVersion,
+  isVersionGreater,
+  parseVersion
+});
 
 function assertOpenClawAvailable () {
   return new Promise((resolve, reject) => {
@@ -1398,109 +980,6 @@ async function buildMetrics () {
   return { gateway, channels, disk, memory, memoryProcesses, version: { local: localVersion, latest: latestRelease.latestVersion, updateAvailable, releaseUrl: latestRelease.releaseUrl, publishedAt: latestRelease.publishedAt, source: latestRelease.source }, model, collectedAt: new Date().toISOString() };
 }
 
-async function runCommandCheck (name, file, args, timeoutMs = 12000, json = false) {
-  return new Promise((resolve) => {
-    execFile(file, args, { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: timeoutMs }, (error, stdout, stderr) => {
-      const output = `${stdout || ''}${stderr || ''}`.trim();
-      let parsed = null;
-      let jsonOk = false;
-      if (json && stdout.trim()) {
-        try {
-          parsed = JSON.parse(stdout.trim());
-          jsonOk = true;
-        } catch {}
-      }
-      resolve({
-        name,
-        ok: !error && (!json || jsonOk),
-        command: [path.basename(file), ...args].join(' '),
-        error: error ? (stderr || stdout || error.message).trim().slice(0, 500) : null,
-        output: output.slice(0, 500),
-        jsonOk,
-        data: parsed
-      });
-    });
-  });
-}
-
-async function buildCompatibilityReport () {
-  const checks = [];
-  checks.push(await runCommandCheck('OpenClaw CLI 可执行', OPENCLAW_BIN, ['--version'], 5000));
-  checks.push(await runCommandCheck('daemon 控制命令可用', OPENCLAW_BIN, ['daemon', '--help'], 8000));
-  checks.push(await runCommandCheck('channels status 帮助可用', OPENCLAW_BIN, ['channels', 'status', '--help'], 8000));
-  checks.push(await runCommandCheck('doctor 命令可用', OPENCLAW_BIN, ['doctor', '--help'], 8000));
-  checks.push(await runCommandCheck('update 命令可用', OPENCLAW_BIN, ['update', '--help'], 8000));
-
-  const probe = await runCommandCheck('channels status --probe --json 结构', OPENCLAW_BIN, ['channels', 'status', '--probe', '--json'], 35000, true);
-  const channels = probe.data?.channels || {};
-  const schemaOk = Boolean(probe.ok && channels.feishu?.probe && channels.telegram?.probe);
-  checks.push({
-    ...probe,
-    ok: schemaOk,
-    requiredFields: ['channels.feishu.probe', 'channels.telegram.probe'],
-    error: schemaOk ? null : (probe.error || 'JSON 缺少看板依赖的通道 probe 字段。')
-  });
-
-  const required = checks.length;
-  const passed = checks.filter((check) => check.ok).length;
-  return {
-    ok: passed === required,
-    passed,
-    required,
-    checks: checks.map(({ data, ...check }) => check),
-    collectedAt: new Date().toISOString()
-  };
-}
-
-async function fetchGithubVersionSource () {
-  try {
-    const response = await axios.get('https://api.github.com/repos/openclaw/openclaw/releases', {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openclaw-dash' },
-      params: { per_page: 20 },
-      timeout: 8000
-    });
-    const releases = Array.isArray(response.data) ? response.data.filter((release) => !release.draft) : [];
-    const latest = releases
-      .filter((release) => !release.prerelease && parseVersion(release.tag_name))
-      .sort((a, b) => compareVersions(b.tag_name, a.tag_name))[0];
-    return { name: 'GitHub Releases', ok: Boolean(latest), latestVersion: latest?.tag_name || null, status: latest ? 'ok' : 'empty', detail: latest ? latest.html_url : '未找到稳定 release。' };
-  } catch (error) {
-    return { name: 'GitHub Releases', ok: false, latestVersion: null, status: 'error', detail: error.response?.data?.message || error.message };
-  }
-}
-
-async function fetchNpmVersionSource () {
-  try {
-    const response = await axios.get('https://registry.npmjs.org/openclaw/latest', {
-      headers: { Accept: 'application/json', 'User-Agent': 'openclaw-dash' },
-      timeout: 8000
-    });
-    return { name: 'npm registry', ok: Boolean(response.data?.version), latestVersion: response.data?.version ? `v${response.data.version}` : null, status: 'ok', detail: 'registry.npmjs.org/openclaw/latest' };
-  } catch (error) {
-    return { name: 'npm registry', ok: false, latestVersion: null, status: 'error', detail: error.response?.data?.error || error.message };
-  }
-}
-
-function fetchDashCacheVersionSource () {
-  const cached = readJsonFile(DASH_VERSION_CACHE_PATH);
-  const fresh = Boolean(cached?.latestVersion && isFreshTimestamp(cached.cachedAt, DASH_VERSION_CACHE_MAX_AGE_MS));
-  return {
-    name: 'Dash cache',
-    ok: fresh,
-    latestVersion: cached?.latestVersion || null,
-    status: cached?.latestVersion ? (fresh ? 'ok' : 'stale') : 'empty',
-    detail: cached?.cachedAt
-      ? `缓存于 ${cached.cachedAt}${fresh ? '' : '，已超过 7 天，不再作为版本依据。'}`
-      : '暂无 dashboard 版本缓存。'
-  };
-}
-
-async function buildVersionSourcesHealth () {
-  const [github, npmSource] = await Promise.all([fetchGithubVersionSource(), fetchNpmVersionSource()]);
-  const cache = fetchDashCacheVersionSource();
-  return { sources: [github, npmSource, cache], collectedAt: new Date().toISOString() };
-}
-
 async function buildUpdatePreflight () {
   const [gatewayProcesses, disk, localVersion, latestRelease, compatibility, diagnostics] = await Promise.all([
     getGatewayProcesses(),
@@ -1526,33 +1005,6 @@ async function buildUpdatePreflight () {
     latestVersion: latestRelease.latestVersion,
     updateAvailable,
     checks,
-    collectedAt: new Date().toISOString()
-  };
-}
-
-function summarizeChannelConfig (config, channel) {
-  const value = config.channels?.[channel] || {};
-  return {
-    channel,
-    enabled: Boolean(value.enabled),
-    connectionMode: value.connectionMode || null,
-    dmPolicy: value.dmPolicy || null,
-    groupPolicy: value.groupPolicy || null,
-    allowFromCount: Array.isArray(value.allowFrom) ? value.allowFrom.length : 0,
-    groupAllowFromCount: Array.isArray(value.groupAllowFrom) ? value.groupAllowFrom.length : 0,
-    blockStreamingConfigured: Object.prototype.hasOwnProperty.call(value, 'blockStreaming'),
-    blockStreaming: value.blockStreaming ?? null,
-    hasSecret: Boolean(value.appSecret || value.botToken || value.accounts)
-  };
-}
-
-function buildConfigHealth () {
-  const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
-  const plugins = config.plugins?.entries || {};
-  return {
-    configExists: fs.existsSync(OPENCLAW_CONFIG_PATH),
-    channels: ['feishu', 'telegram', 'email'].map((channel) => summarizeChannelConfig(config, channel)),
-    plugins: Object.keys(plugins).sort().map((name) => ({ name, enabled: Boolean(plugins[name]?.enabled) })),
     collectedAt: new Date().toISOString()
   };
 }
