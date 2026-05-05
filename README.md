@@ -53,7 +53,6 @@ Current guardrails:
 
 Known engineering work still planned:
 
-- Continue splitting domain routes out of `server.js` as the API surface grows.
 - Make OpenClaw binary path discovery configurable across more install locations.
 - Keep Linux/Windows support out of scope until OpenClaw Gateway operations are validated there.
 
@@ -207,6 +206,9 @@ The server is organized as a route aggregator plus focused support modules under
 - `runtime.js` for filesystem and system-command helpers.
 - `processes.js` for process/memory display helpers.
 - `realtime.js` for WebSocket state streaming.
+- `auth-service.js` for token/session auth, local login, API guard middleware, and audit entries.
+- `gateway-service.js` for Gateway process detection, control commands, and watchdog alerts.
+- `channel-service.js` for channel health inference, message stats, real verification, and channel watchdog alerts.
 - `version-service.js` for local/upstream version checks and version source health.
 - `diagnostics-service.js` for model detection, OpenClaw probes, compatibility checks, Feishu direct diagnostics, and config health.
 - `metrics-service.js` for Gateway, channel, disk, memory, process, model, and version metrics aggregation.

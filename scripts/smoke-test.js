@@ -73,6 +73,7 @@ async function main () {
   run(process.execPath, ['--check', serverPath]);
 
   const server = fs.readFileSync(serverPath, 'utf8');
+  const channelService = fs.readFileSync(path.join(root, 'src', 'server', 'channel-service.js'), 'utf8');
   const routeSources = fs.readdirSync(routeDir)
     .filter((file) => file.endsWith('.js'))
     .map((file) => fs.readFileSync(path.join(routeDir, file), 'utf8'))
@@ -86,7 +87,7 @@ async function main () {
     fail('server.js should not import child_process.exec.');
   }
 
-  const inferFn = server.match(/function inferLatestChannelStatus\s*\(line\) \{[\s\S]*?\n\}/);
+  const inferFn = channelService.match(/function inferLatestChannelStatus\s*\(line\) \{[\s\S]*?\n\}/);
   if (!inferFn || !inferFn[0].includes("return 'unknown';")) {
     fail('inferLatestChannelStatus should return unknown when there is no positive or negative signal.');
   }
