@@ -56,6 +56,7 @@ const channelAlertState = {
   feishu: { initialized: false, offlineSince: null, alerted: false },
   telegram: { initialized: false, offlineSince: null, alerted: false }
 };
+let channelProbeCache = { value: null, expiresAt: 0, promise: null };
 let updateJob = loadPersistedUpdateJob();
 
 app.use(cors());
@@ -342,7 +343,76 @@ function explainChannelStatus (channel, status, lastSignalLine, lastErrorLine) {
   return '未检测到可证明通道在线的近期健康信号。';
 }
 
-async function getChannelHealth (channel) {
+function maxProbeTimestamp (...values) {
+  const timestamps = values
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (!timestamps.length) return null;
+  return new Date(Math.max(...timestamps)).toISOString();
+}
+
+function deriveChannelHealthFromProbe (channel, probe) {
+  if (!probe?.ok) return null;
+
+  const channelProbe = probe.channels?.[channel] || {};
+  const accounts = Array.isArray(probe.channelAccounts?.[channel]) ? probe.channelAccounts[channel] : [];
+  const account = accounts.find((item) => item.connected || item.probe?.ok || item.running) || accounts[0] || {};
+  const configured = channelProbe.configured !== false && account.configured !== false;
+  const running = Boolean(channelProbe.running ?? account.running);
+  const probeOk = Boolean(channelProbe.probe?.ok || account.probe?.ok);
+  const connected = Boolean(channelProbe.connected || account.connected);
+  const lastSeenAt = maxProbeTimestamp(
+    channelProbe.lastProbeAt,
+    channelProbe.lastStartAt,
+    channelProbe.lastConnectedAt,
+    channelProbe.lastTransportActivityAt,
+    channelProbe.lastInboundAt,
+    channelProbe.lastOutboundAt,
+    account.lastProbeAt,
+    account.lastStartAt,
+    account.lastConnectedAt,
+    account.lastTransportActivityAt,
+    account.lastInboundAt,
+    account.lastOutboundAt
+  );
+  const lastError = channelProbe.lastError || account.lastError || null;
+  const status = configured && (probeOk || connected || running) ? 'online' : 'offline';
+
+  return {
+    status,
+    lastSeenAt,
+    lastSignalAt: status === 'online' ? lastSeenAt : null,
+    lastErrorAt: null,
+    lastError,
+    reason: status === 'online'
+      ? `OpenClaw CLI 探针确认 ${channel === 'telegram' ? 'Telegram' : '飞书'} ${probeOk ? 'probe.ok' : connected ? 'connected' : 'running'}。`
+      : (configured ? (lastError || 'OpenClaw CLI 探针未确认通道在线。') : 'OpenClaw CLI 显示通道未配置。')
+  };
+}
+
+function mergeChannelHealth (logHealth, probeHealth) {
+  if (!probeHealth) return logHealth;
+  if (probeHealth.status === 'online') {
+    return {
+      ...logHealth,
+      status: 'online',
+      lastSeenAt: probeHealth.lastSeenAt || logHealth.lastSeenAt,
+      lastSignalAt: probeHealth.lastSignalAt || logHealth.lastSignalAt,
+      lastErrorAt: logHealth.lastErrorAt,
+      lastError: logHealth.lastError || probeHealth.lastError,
+      reason: probeHealth.reason
+    };
+  }
+  if (logHealth.status === 'online') return logHealth;
+  return {
+    ...logHealth,
+    lastSeenAt: logHealth.lastSeenAt || probeHealth.lastSeenAt,
+    lastError: logHealth.lastError || probeHealth.lastError,
+    reason: probeHealth.reason || logHealth.reason
+  };
+}
+
+async function getChannelHealth (channel, probe = null) {
   const content = await readTail(LOG_PATH, CHANNEL_STATS_TAIL_LINES);
   const related = content.split(/\r?\n/).filter((line) => isChannelRelatedLine(channel, line));
   const positivePattern = /(^|[^a-z0-9])(connected|online|success|running|started|active|login|logged\s*in|ready|authenticated|received|message|reaction|event|dispatch(?:ing)?|provider|register(?:ed|ing)?|command|menu|listening)(?=$|[^a-z0-9])/i;
@@ -372,7 +442,7 @@ async function getChannelHealth (channel) {
   const errorIsLater = lastErrorLine && (!lastSignalLine || String(lastErrorAt || '') >= String(lastSignalAt || ''));
   const status = lastSignalLine && !errorIsLater ? 'online' : 'offline';
 
-  return {
+  const logHealth = {
     status,
     lastSeenAt: lastSeenAt || lastSignalAt || lastErrorAt || null,
     lastSignalAt,
@@ -380,6 +450,7 @@ async function getChannelHealth (channel) {
     lastError: lastErrorLine ? lastErrorLine.slice(0, 500) : null,
     reason: explainChannelStatus(channel, status, lastSignalLine, lastErrorLine)
   };
+  return mergeChannelHealth(logHealth, deriveChannelHealthFromProbe(channel, probe));
 }
 
 async function getChannelMessageStats (channel) {
@@ -629,6 +700,33 @@ async function runOpenClawChannelProbe () {
   return { ok: true, error: null, ...result.data };
 }
 
+async function getCachedOpenClawChannelProbe (force = false) {
+  const now = Date.now();
+  if (!force && channelProbeCache.value && channelProbeCache.expiresAt > now) return channelProbeCache.value;
+  if (!force && channelProbeCache.promise) return channelProbeCache.promise;
+
+  channelProbeCache.promise = runOpenClawChannelProbe()
+    .then((probe) => {
+      channelProbeCache = {
+        value: probe,
+        expiresAt: Date.now() + 15000,
+        promise: null
+      };
+      return probe;
+    })
+    .catch((error) => {
+      const probe = { ok: false, error: error.message, channels: {} };
+      channelProbeCache = {
+        value: probe,
+        expiresAt: Date.now() + 5000,
+        promise: null
+      };
+      return probe;
+    });
+
+  return channelProbeCache.promise;
+}
+
 function getFeishuSecretPath (config) {
   const secretRef = config.channels?.feishu?.appSecret || {};
   if (secretRef.source === 'file' && typeof secretRef.id === 'string') {
@@ -797,7 +895,7 @@ async function verifyFeishuChannel () {
   });
 
   if (response.data?.code !== 0) throw new Error(response.data?.msg || '飞书测试消息发送失败。');
-  const health = await getChannelHealth('feishu');
+  const health = await getChannelHealth('feishu', await getCachedOpenClawChannelProbe(true));
   return {
     channel: 'feishu',
     sent: true,
@@ -821,7 +919,7 @@ async function verifyTelegramChannel () {
   }, { timeout: 10000 });
 
   if (!response.data?.ok) throw new Error(response.data?.description || 'Telegram 测试消息发送失败。');
-  const health = await getChannelHealth('telegram');
+  const health = await getChannelHealth('telegram', await getCachedOpenClawChannelProbe(true));
   return {
     channel: 'telegram',
     sent: true,
@@ -880,15 +978,15 @@ function buildRecommendations ({ gatewayRunning, channels, openclawProbe, feishu
 }
 
 async function buildDiagnostics () {
-  const [gatewayProcesses, channels, openclawProbe, feishuDirect, localVersion, latestRelease, model] = await Promise.all([
+  const [gatewayProcesses, openclawProbe, feishuDirect, localVersion, latestRelease, model] = await Promise.all([
     getGatewayProcesses(),
-    checkChannelsStatus(),
-    runOpenClawChannelProbe(),
+    getCachedOpenClawChannelProbe(true),
     getFeishuDirectProbe(),
     getLocalVersion(),
     getLatestReleaseInfo(),
     getCurrentModelInfo()
   ]);
+  const channels = await checkChannelsStatus(openclawProbe);
   const version = {
     local: localVersion,
     latest: latestRelease.latestVersion,
@@ -916,8 +1014,9 @@ async function buildDiagnostics () {
   };
 }
 
-async function checkChannelsStatus () {
-  const [feishu, telegram] = await Promise.all([getChannelHealth('feishu'), getChannelHealth('telegram')]);
+async function checkChannelsStatus (probe = null) {
+  const channelProbe = probe || await getCachedOpenClawChannelProbe();
+  const [feishu, telegram] = await Promise.all([getChannelHealth('feishu', channelProbe), getChannelHealth('telegram', channelProbe)]);
   return { feishu: feishu.status, telegram: telegram.status, detail: { feishu, telegram } };
 }
 
@@ -1271,9 +1370,10 @@ async function buildMetrics () {
       }
     } catch (_) {}
   }
+  const channelProbe = await getCachedOpenClawChannelProbe();
   const [feishuHealth, telegramHealth, feishuStats, telegramStats] = await Promise.all([
-    getChannelHealth('feishu'),
-    getChannelHealth('telegram'),
+    getChannelHealth('feishu', channelProbe),
+    getChannelHealth('telegram', channelProbe),
     getChannelMessageStats('feishu'),
     getChannelMessageStats('telegram')
   ]);

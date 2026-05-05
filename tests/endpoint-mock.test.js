@@ -97,7 +97,7 @@ echo "{}"
   }));
   writeFile(path.join(tempHome, '.openclaw/logs/gateway.log'), [
     '2026-05-05T10:00:00 [feishu] connected',
-    '2026-05-05T10:00:01 [telegram] connected',
+    '2026-05-05T10:00:01 [gateway] telegram polling logs are quiet in this fixture',
     '2026-05-05T10:00:02 agent model: mock/provider'
   ].join('\n'));
 
