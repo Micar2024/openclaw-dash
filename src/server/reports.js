@@ -15,15 +15,19 @@ function markdownEscape (value) {
 }
 
 async function buildMarkdownReport (deps) {
-  const [metricsResult, diagnosticsResult, healthResult, errorsResult] = await Promise.all([
+  const [metricsResult, diagnosticsResult, healthResult, officialResult, troubleshootingResult, errorsResult] = await Promise.all([
     collectSection('metrics', deps.buildMetrics),
     collectSection('diagnostics', deps.buildDiagnostics),
     collectSection('health', deps.buildHealthSummary),
+    collectSection('official-dashboard', deps.getOfficialDashboardStatus),
+    collectSection('troubleshooting', deps.buildTroubleshootingGuide),
     collectSection('errors', () => deps.readRecentErrorEntriesWithMeta(1000, 8))
   ]);
   const metrics = metricsResult.data || {};
   const diagnostics = diagnosticsResult.data || {};
   const health = healthResult.data || {};
+  const official = officialResult.data || {};
+  const troubleshooting = troubleshootingResult.data || {};
   const errors = errorsResult.data || { errors: [] };
   const lines = [];
   lines.push('# OpenClaw Dash 诊断报告');
@@ -52,6 +56,28 @@ async function buildMarkdownReport (deps) {
     lines.push(`- Gateway 指标采集失败：${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
+  lines.push('## 官方 Control UI');
+  lines.push('');
+  if (officialResult.ok) {
+    lines.push(`- URL：${markdownEscape(official.url || '-')}`);
+    lines.push(`- 可达：${official.reachable ? '是' : '否'}`);
+    lines.push(`- HTTP：${markdownEscape(official.httpStatus || '-')}`);
+    lines.push(`- Auth：${official.auth?.configured ? '已配置' : '未检测到显式配置'}（mode: ${markdownEscape(official.auth?.mode || '-')}）`);
+    lines.push(`- 建议：${markdownEscape(official.recommendation || '-')}`);
+  } else {
+    lines.push(`- 官方 Control UI 状态采集失败：${markdownEscape(officialResult.error)}`);
+  }
+  lines.push('');
+  lines.push('## 排障路径');
+  lines.push('');
+  if (troubleshootingResult.ok) {
+    for (const step of troubleshooting.steps || []) {
+      lines.push(`- ${markdownEscape(step.title)}：${markdownEscape(step.detail)}`);
+    }
+  } else {
+    lines.push(`- 排障路径采集失败：${markdownEscape(troubleshootingResult.error)}`);
+  }
+  lines.push('');
   lines.push('## 版本');
   lines.push('');
   if (metricsResult.ok) {
@@ -66,11 +92,11 @@ async function buildMarkdownReport (deps) {
   lines.push('## 通道');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push('| 通道 | 状态 | 最近活动 | 今日消息 | 最近 1 小时 | 错误 |');
-    lines.push('| --- | --- | --- | ---: | ---: | ---: |');
+    lines.push('| 通道 | 状态 | 可信度 | 最近活动 | 今日消息 | 最近 1 小时 | 错误 |');
+    lines.push('| --- | --- | --- | --- | ---: | ---: | ---: |');
     const channelItems = Array.isArray(metrics.channelItems) && metrics.channelItems.length ? metrics.channelItems : Object.entries(metrics.channels || {}).map(([id, value]) => ({ id, ...value }));
     for (const channel of channelItems) {
-      lines.push(`| ${markdownEscape(channel.label || channel.id)} | ${markdownEscape(channel.status)} | ${markdownEscape(channel.lastSeenAt || '-')} | ${channel.stats?.todayMessages ?? '-'} | ${channel.stats?.lastHourMessages ?? '-'} | ${channel.stats?.errorCount ?? '-'} |`);
+      lines.push(`| ${markdownEscape(channel.label || channel.id)} | ${markdownEscape(channel.status)} | ${markdownEscape(channel.verification?.label || '-')} | ${markdownEscape(channel.lastSeenAt || '-')} | ${channel.stats?.todayMessages ?? '-'} | ${channel.stats?.lastHourMessages ?? '-'} | ${channel.stats?.errorCount ?? '-'} |`);
     }
   } else {
     lines.push(`- 通道信息采集失败：${markdownEscape(metricsResult.error)}`);
@@ -159,6 +185,8 @@ async function buildSupportBundle (deps) {
     collectSection('metrics.json', deps.buildMetrics),
     collectSection('diagnostics.json', deps.buildDiagnostics),
     collectSection('health.json', deps.buildHealthSummary),
+    collectSection('official-dashboard.json', deps.getOfficialDashboardStatus),
+    collectSection('troubleshooting.json', deps.buildTroubleshootingGuide),
     collectSection('compatibility.json', deps.buildCompatibilityReport),
     collectSection('config-health.json', deps.buildConfigHealth),
     collectSection('errors.json', () => deps.readRecentErrorEntriesWithMeta(1000, 20))

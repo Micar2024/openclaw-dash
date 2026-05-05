@@ -9,6 +9,8 @@ const { readJsonFile, readTail } = require('./runtime');
 
 function createChannelService (deps) {
   const channelAlertState = {};
+  const realVerifyState = {};
+  const REAL_VERIFY_TTL_MS = 10 * 60 * 1000;
   const channelLabels = {
     feishu: '飞书',
     lark: '飞书',
@@ -57,6 +59,29 @@ function createChannelService (deps) {
 
   function supportsRealVerify (channel) {
     return ['feishu', 'telegram'].includes(channel);
+  }
+
+  function verificationMeta (source, channel, detail) {
+    const labels = {
+      direct: '真实收发验证',
+      probe: 'OpenClaw CLI 探针',
+      log: '日志推断',
+      config: '配置状态',
+      none: '无正向信号'
+    };
+    const confidence = {
+      direct: 'high',
+      probe: 'high',
+      log: 'medium',
+      config: 'low',
+      none: 'low'
+    };
+    return {
+      source,
+      label: labels[source] || source,
+      confidence: confidence[source] || 'low',
+      detail: detail || `${getChannelLabel(channel)} 使用${labels[source] || source}判断。`
+    };
   }
 
   function getConfiguredChannels () {
@@ -151,6 +176,7 @@ function createChannelService (deps) {
 
     const label = getChannelLabel(channel);
     const onlineReason = probeOk ? 'probe.ok' : connected ? 'connected' : 'running';
+    const verificationDetail = status === 'online' ? `OpenClaw CLI 返回 ${onlineReason}。` : 'OpenClaw CLI 未确认通道在线。';
 
     return {
       id: channel,
@@ -161,6 +187,7 @@ function createChannelService (deps) {
       lastSignalAt: status === 'online' ? lastSeenAt : null,
       lastErrorAt: null,
       lastError,
+      verification: verificationMeta('probe', channel, verificationDetail),
       reason: status === 'online'
         ? `OpenClaw CLI 探针确认 ${label} ${onlineReason}。`
         : (configured ? (lastError || 'OpenClaw CLI 探针未确认通道在线。') : 'OpenClaw CLI 显示通道未配置。')
@@ -177,6 +204,7 @@ function createChannelService (deps) {
         lastSignalAt: probeHealth.lastSignalAt || logHealth.lastSignalAt,
         lastErrorAt: logHealth.lastErrorAt,
         lastError: logHealth.lastError || probeHealth.lastError,
+        verification: probeHealth.verification,
         reason: probeHealth.reason
       };
     }
@@ -185,7 +213,29 @@ function createChannelService (deps) {
       ...logHealth,
       lastSeenAt: logHealth.lastSeenAt || probeHealth.lastSeenAt,
       lastError: logHealth.lastError || probeHealth.lastError,
+      verification: probeHealth.verification || logHealth.verification,
       reason: probeHealth.reason || logHealth.reason
+    };
+  }
+
+  function applyRealVerification (channel, health) {
+    const verified = realVerifyState[channel];
+    if (!verified || Date.now() - verified.verifiedAt > REAL_VERIFY_TTL_MS) return health;
+    return {
+      ...health,
+      status: verified.received ? 'online' : health.status,
+      lastSeenAt: verified.lastInboundAt || health.lastSeenAt,
+      lastSignalAt: verified.received ? (verified.lastInboundAt || new Date(verified.verifiedAt).toISOString()) : health.lastSignalAt,
+      verification: verificationMeta(
+        'direct',
+        channel,
+        verified.received
+          ? '最近真实验证已发送测试消息，并确认 Gateway 近期活动。'
+          : '最近真实验证已发送测试消息，但 Gateway 近期活动仍未确认。'
+      ),
+      reason: verified.received
+        ? '真实验证确认测试消息发送成功，且 Gateway 近期活动正常。'
+        : health.reason
     };
   }
 
@@ -201,6 +251,7 @@ function createChannelService (deps) {
         lastSignalAt: null,
         lastErrorAt: null,
         lastError: null,
+        verification: verificationMeta('config', channel, '配置中该通道未启用。'),
         reason: '配置中该通道未启用。'
       };
     }
@@ -243,9 +294,10 @@ function createChannelService (deps) {
       lastSignalAt,
       lastErrorAt,
       lastError: lastErrorLine ? lastErrorLine.slice(0, 500) : null,
+      verification: verificationMeta(lastSignalLine ? 'log' : 'none', channel, lastSignalLine ? '从 Gateway 日志中发现最近健康信号。' : '未发现可证明在线的日志或探针信号。'),
       reason: explainChannelStatus(channel, status, lastSignalLine, lastErrorLine)
     };
-    return mergeChannelHealth(logHealth, deriveChannelHealthFromProbe(channel, probe));
+    return applyRealVerification(channel, mergeChannelHealth(logHealth, deriveChannelHealthFromProbe(channel, probe)));
   }
 
   async function getChannelMessageStats (channel) {
@@ -368,9 +420,17 @@ function createChannelService (deps) {
   }
 
   async function verifyChannel (channel) {
-    if (channel === 'feishu') return verifyFeishuChannel();
-    if (channel === 'telegram') return verifyTelegramChannel();
-    throw new Error('仅支持 feishu 或 telegram。');
+    let result;
+    if (channel === 'feishu') result = await verifyFeishuChannel();
+    else if (channel === 'telegram') result = await verifyTelegramChannel();
+    else throw new Error('仅支持 feishu 或 telegram。');
+    realVerifyState[channel] = {
+      sent: Boolean(result.sent),
+      received: Boolean(result.received),
+      lastInboundAt: result.lastInboundAt,
+      verifiedAt: Date.now()
+    };
+    return result;
   }
 
   async function checkChannelsStatus (probe = null) {

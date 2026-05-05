@@ -16,6 +16,7 @@ const OPENCLAW_CONFIG_PATH = path.join(HOME, '.openclaw/openclaw.json');
 const UPDATE_CHECK_PATH = path.join(HOME, '.openclaw/update-check.json');
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || path.join(HOME, '.npm-global/bin/openclaw');
 const GATEWAY_PORT = process.env.OPENCLAW_GATEWAY_PORT || '18789';
+const GATEWAY_HOST = process.env.OPENCLAW_GATEWAY_HOST || '127.0.0.1';
 const DASHBOARD_PATH = [
   path.join(HOME, '.npm-global/bin'),
   '/usr/local/bin',
@@ -57,6 +58,7 @@ module.exports = {
   DASHBOARD_PATH,
   DEFAULT_LOG_MUTE_RULES,
   ERR_LOG_PATH,
+  GATEWAY_HOST,
   GATEWAY_PORT,
   HOST,
   LOG_MUTE_RULES_PATH,

@@ -29,6 +29,7 @@ const { createAuthService } = require('./src/server/auth-service');
 const { createChannelService } = require('./src/server/channel-service');
 const { createGatewayService } = require('./src/server/gateway-service');
 const { createMetricsService } = require('./src/server/metrics-service');
+const { createOfficialDashboardService } = require('./src/server/official-dashboard-service');
 const { createUpdateService } = require('./src/server/update-service');
 const { redactSensitiveText } = require('./src/server/redaction');
 const {
@@ -62,6 +63,8 @@ const { registerVersionRoutes } = require('./src/server/routes/version');
 const app = express();
 const authService = createAuthService();
 const gatewayService = createGatewayService();
+const officialDashboardService = createOfficialDashboardService();
+const { getOfficialDashboardStatus } = officialDashboardService;
 const {
   appendAudit,
   clearSessionCookie,
@@ -279,6 +282,87 @@ async function buildHealthSummary () {
   return { score, level, summary, checks, collectedAt: new Date().toISOString() };
 }
 
+async function buildTroubleshootingGuide () {
+  const [metrics, officialDashboard, diagnostics, errors] = await Promise.all([
+    buildMetrics(),
+    getOfficialDashboardStatus(),
+    buildDiagnostics(),
+    readRecentErrorEntriesWithMeta(1000, 5)
+  ]);
+  const steps = [];
+  const channelItems = Array.isArray(metrics.channelItems) ? metrics.channelItems : [];
+  const offlineChannels = channelItems.filter((channel) => channel.status !== 'online');
+
+  if (!metrics.gateway?.isRunning) {
+    steps.push({
+      level: 'critical',
+      title: '先恢复 Gateway 进程',
+      detail: '本看板仍可导出报告；下一步点击 Gateway 运行控制的「启动」，失败时查看最近错误日志和 openclaw doctor。'
+    });
+  } else if (!officialDashboard.reachable) {
+    steps.push({
+      level: 'warning',
+      title: 'Gateway 在运行，但官方 Control UI 不可达',
+      detail: `检查 ${officialDashboard.url}、端口 ${process.env.OPENCLAW_GATEWAY_PORT || '18789'}、gateway.controlUi.basePath 或官方 Dashboard 鉴权配置。`
+    });
+  } else if (!officialDashboard.auth?.configured) {
+    steps.push({
+      level: 'info',
+      title: '官方 Control UI 可达，但未发现显式 auth 配置',
+      detail: '如果官方 UI 出现 unauthorized / 1008，运行 openclaw doctor --generate-gateway-token 或检查 gateway.auth.token/password。'
+    });
+  } else {
+    steps.push({
+      level: 'ok',
+      title: '官方 Control UI 可作为操作入口',
+      detail: 'OpenClaw Dash 负责诊断和导出报告；需要聊天、官方设置或 Gateway 原生能力时，打开官方 Control UI。'
+    });
+  }
+
+  if (offlineChannels.length) {
+    steps.push({
+      level: 'warning',
+      title: '处理离线通道',
+      detail: `离线通道：${offlineChannels.map((channel) => channel.label || channel.id).join('、')}。先看可信度标签；支持真实验证的通道可发送端到端测试消息。`
+    });
+  }
+
+  if (metrics.version?.updateAvailable) {
+    steps.push({
+      level: 'info',
+      title: '升级前先预检',
+      detail: `检测到 ${metrics.version.latest || '新版本'}。先查看升级前预检，确认磁盘、CLI 兼容性、Gateway 状态和通道探针再更新。`
+    });
+  }
+
+  if (errors.errors.length) {
+    steps.push({
+      level: 'warning',
+      title: '带着错误摘要求助',
+      detail: `发现 ${errors.errors.length} 条未静音错误。导出求助包会自动脱敏，适合直接贴到社区。`
+    });
+  }
+
+  if (!steps.some((step) => ['critical', 'warning'].includes(step.level))) {
+    steps.push({
+      level: 'ok',
+      title: '状态稳定，保留为应急工具',
+      detail: '没事时不用盯着看；遇到异常时先导出报告，再决定是否打开官方 Control UI 操作。'
+    });
+  }
+
+  return {
+    steps,
+    officialDashboard,
+    collectedAt: new Date().toISOString(),
+    context: {
+      gatewayRunning: Boolean(metrics.gateway?.isRunning),
+      offlineChannels: offlineChannels.map((channel) => channel.id),
+      recommendations: diagnostics.recommendations || []
+    }
+  };
+}
+
 const { buildMetrics } = createMetricsService({
   checkChannelsStatus,
   getCachedOpenClawChannelProbe,
@@ -356,7 +440,9 @@ registerMetricsRoutes(app, { buildMetrics });
 
 registerProductRoutes(app, {
   buildHealthSummary,
-  buildSetupStatus
+  buildSetupStatus,
+  buildTroubleshootingGuide,
+  getOfficialDashboardStatus
 });
 
 registerLogRoutes(app, {
@@ -380,7 +466,9 @@ registerReportRoutes(app, {
     buildConfigHealth,
     buildDiagnostics,
     buildHealthSummary,
+    buildTroubleshootingGuide,
     buildMetrics,
+    getOfficialDashboardStatus,
     readRecentErrorEntriesWithMeta
   }),
   buildSupportBundle: () => buildSupportBundle({
@@ -388,7 +476,9 @@ registerReportRoutes(app, {
     buildConfigHealth,
     buildDiagnostics,
     buildHealthSummary,
+    buildTroubleshootingGuide,
     buildMetrics,
+    getOfficialDashboardStatus,
     readRecentErrorEntriesWithMeta
   })
 });

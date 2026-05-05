@@ -386,9 +386,14 @@ function summarizeChannelConfig (config, channel) {
 function buildConfigHealth () {
   const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
   const plugins = config.plugins?.entries || {};
+  const configuredChannels = Object.keys(config.channels || {});
+  const channels = [...new Set([...configuredChannels, 'feishu', 'telegram'])].sort((a, b) => {
+    const priority = { feishu: 0, telegram: 1 };
+    return (priority[a] ?? 20) - (priority[b] ?? 20) || a.localeCompare(b);
+  });
   return {
     configExists: fs.existsSync(OPENCLAW_CONFIG_PATH),
-    channels: ['feishu', 'telegram', 'email'].map((channel) => summarizeChannelConfig(config, channel)),
+    channels: channels.map((channel) => summarizeChannelConfig(config, channel)),
     plugins: Object.keys(plugins).sort().map((name) => ({ name, enabled: Boolean(plugins[name]?.enabled) })),
     collectedAt: new Date().toISOString()
   };

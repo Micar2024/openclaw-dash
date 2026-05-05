@@ -20,6 +20,9 @@ A lightweight local diagnostic toolkit for the OpenClaw community. Open the dash
 - Update preflight checks for version diff, disk space, CLI compatibility, Gateway state, and channel probes.
 - Channel stats, recent errors, operation audit log, and fault timeline.
 - Dynamic channel grid for Feishu, Telegram, Email, and future OpenClaw channels discovered from config/probe output.
+- Official OpenClaw Control UI companion card for reachability, auth presence, safe open links, and support-report context.
+- Troubleshooting path suggestions that decide whether to use OpenClaw Dash, the official Control UI, channel verification, or a redacted support bundle.
+- Channel trust labels that distinguish direct verification, OpenClaw CLI probes, log inference, and config-only status.
 - WebSocket realtime push for Gateway and channel state, with polling as a fallback.
 - Memory and disk monitoring for macOS.
 - Read-only configuration health view for channel enablement, allowlist counts, and `blockStreaming`.
@@ -106,6 +109,19 @@ OpenClaw Dash 的主线不是替代 OpenClaw，也不是做重型监控平台，
 - **第三层：OpenClaw JSON/探针能力** — 通道 probe、模型运行态等增强信息。失败时不会阻止报告生成。
 
 因此即使 Gateway 已经挂掉，Dashboard 也应该能导出半份有用报告：进程不在、最后日志时间、近期错误、系统状态、只读配置健康和版本线索。Markdown 报告采用分段容错策略，单个数据源失败不会阻止整份报告生成。
+
+## 和官方 Dashboard 的关系
+
+OpenClaw 官方 Dashboard / Control UI 是 Gateway 自带的操作界面，适合聊天、官方设置、Gateway 原生管理和 WebSocket 连接。OpenClaw Dash 不替代它，也不读取或保存官方 token。
+
+OpenClaw Dash 的互补点是诊断：
+
+- 检测官方 Control UI 是否可达，并提供安全跳转入口
+- 只读展示官方 Gateway auth 是否存在（只显示 present/absent，不显示密钥值）
+- 在诊断报告和求助包里记录官方 UI 可达性、HTTP 状态和排障建议
+- 当官方 UI 进不去时，仍然从本机进程、日志、配置和系统资源生成报告
+
+简单理解：官方 Control UI 负责“操作 OpenClaw”，OpenClaw Dash 负责“把问题说清楚”。
 
 ## Configuration
 
@@ -267,6 +283,7 @@ The server is organized as a route aggregator plus focused support modules under
 - `version-service.js` for local/upstream version checks and version source health.
 - `diagnostics-service.js` for model detection, OpenClaw probes, compatibility checks, Feishu direct diagnostics, and config health.
 - `metrics-service.js` for Gateway, channel, disk, memory, process, model, and version metrics aggregation.
+- `official-dashboard-service.js` for official Control UI reachability and auth-presence diagnostics.
 - `update-service.js` for update job persistence, preflight checks, update steps, doctor, restart, and post-update diagnostics.
 - `reports.js` for Markdown report rendering.
 - `timeline.js` for fault timeline aggregation.

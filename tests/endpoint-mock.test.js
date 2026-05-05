@@ -174,6 +174,14 @@ echo "{}"
     assert.ok(Number.isFinite(health.json.score));
     assert.ok(Array.isArray(health.json.checks));
 
+    const officialDashboard = await request(server, '/api/official-dashboard', { headers });
+    assert.strictEqual(officialDashboard.status, 200);
+    assert.match(officialDashboard.json.url, /127\.0\.0\.1/);
+
+    const troubleshooting = await request(server, '/api/troubleshooting', { headers });
+    assert.strictEqual(troubleshooting.status, 200);
+    assert.ok(Array.isArray(troubleshooting.json.steps));
+
     const preflight = await request(server, '/api/update/preflight', { headers });
     assert.strictEqual(preflight.status, 200);
     assert.ok(Array.isArray(preflight.json.checks));
@@ -182,6 +190,8 @@ echo "{}"
     assert.strictEqual(report.status, 200);
     assert.match(report.body, /OpenClaw Dash 诊断报告/);
     assert.match(report.body, /Gateway/);
+    assert.match(report.body, /官方 Control UI/);
+    assert.match(report.body, /排障路径/);
     assert.match(report.body, /脱敏状态/);
     assert.match(report.body, /容错策略/);
     assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|123456789|ABCdefghijklmnopqrstuvwxyz|638d64ce/);
@@ -199,7 +209,9 @@ echo "{}"
       'health.json',
       'manifest.json',
       'metrics.json',
-      'report.md'
+      'official-dashboard.json',
+      'report.md',
+      'troubleshooting.json'
     ].sort());
 
     const snapshot = await waitForRealtimeSnapshot(server, 'endpoint-mock-token');

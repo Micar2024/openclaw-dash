@@ -14,6 +14,22 @@ function registerProductRoutes (app, deps) {
       res.status(500).json({ error: error.message });
     }
   });
+
+  app.get('/api/official-dashboard', async (req, res) => {
+    try {
+      res.json(await deps.getOfficialDashboardStatus());
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/troubleshooting', async (req, res) => {
+    try {
+      res.json(await deps.buildTroubleshootingGuide());
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 }
 
 module.exports = { registerProductRoutes };

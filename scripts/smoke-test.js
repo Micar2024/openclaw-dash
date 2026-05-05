@@ -9,6 +9,7 @@ const serverPath = path.join(root, 'server.js');
 const configPath = path.join(root, 'src', 'server', 'config.js');
 const routeDir = path.join(root, 'src', 'server', 'routes');
 const htmlPath = path.join(root, 'public', 'index.html');
+const appJsPath = path.join(root, 'public', 'assets', 'app.js');
 const cssPath = path.join(root, 'public', 'assets', 'app.css');
 const html2canvasPath = path.join(root, 'public', 'vendor', 'html2canvas.min.js');
 
@@ -109,7 +110,7 @@ async function main () {
     fail('install.sh should not print the dashboard token value.');
   }
 
-  for (const route of ['/api/status', '/api/metrics', '/api/diagnostics', '/api/update/preflight', '/api/config/health', '/api/setup/status', '/api/health/summary', '/api/report.md', '/api/support-bundle.tgz']) {
+  for (const route of ['/api/status', '/api/metrics', '/api/diagnostics', '/api/update/preflight', '/api/config/health', '/api/setup/status', '/api/health/summary', '/api/official-dashboard', '/api/troubleshooting', '/api/report.md', '/api/support-bundle.tgz']) {
     if (!apiSources.includes(`'${route}'`) && !apiSources.includes(`"${route}"`)) fail(`Expected API route missing: ${route}`);
   }
 
@@ -119,6 +120,7 @@ async function main () {
   }
 
   const html = fs.readFileSync(htmlPath, 'utf8');
+  const appJs = fs.readFileSync(appJsPath, 'utf8');
   if (/https:\/\/cdn\.tailwindcss\.com|https:\/\/cdn\.jsdelivr\.net/i.test(html)) {
     fail('public/index.html should not depend on external CDN scripts.');
   }
@@ -139,6 +141,13 @@ async function main () {
     } catch (error) {
       fail(`public/index.html inline script #${index + 1} does not parse: ${error.message}`);
     }
+  }
+
+  try {
+    const parsedAppJs = new vm.Script(appJs);
+    if (!parsedAppJs) fail('public/assets/app.js did not parse.');
+  } catch (error) {
+    fail(`public/assets/app.js does not parse: ${error.message}`);
   }
 
   await runEndpointSmokeTests();
