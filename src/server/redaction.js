@@ -11,7 +11,8 @@ const REDACTION_PATTERNS = [
   { pattern: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, replacement: '[IP_REDACTED]' },
   { pattern: /\/Users\/[^\s<>"'`]+/g, replacement: '/Users/[REDACTED]' },
   { pattern: /\bPID\s*[:：=]\s*\d+\b/gi, replacement: 'PID: [REDACTED]' },
-  { pattern: /\b\d{8,}\b/g, replacement: '[NUMBER_REDACTED]' }
+  { pattern: /\b[0-9a-f]{32,}\b/gi, replacement: '[HEX_TOKEN_REDACTED]' },
+  { pattern: /\b\d{16,}\b/g, replacement: '[LONG_NUMBER_REDACTED]' }
 ];
 
 function redactSensitiveText (value) {

@@ -28,7 +28,7 @@ function createAuthService () {
       return generatedToken;
     } catch (error) {
       console.error('[Auth] 访问口令文件初始化失败:', error.message);
-      return crypto.randomBytes(24).toString('base64url');
+      throw new Error(`无法写入或读取访问口令文件 ${TOKEN_PATH}: ${error.message}。请检查文件权限。`);
     }
   }
 

@@ -469,30 +469,32 @@ function renderChannels(channels) {
       ? '<span class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">支持真实验证</span>'
       : '<span class="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-500">日志/探针监测</span>';
     const trustBadge = `<span class="rounded-md border px-2 py-1 text-[11px] ${confidenceClass}">${escapeHtml(verification.label || '可信度未知')}</span>`;
-    return `<article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-      <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0">
-          <div class="flex flex-wrap items-center gap-2">
-            <p class="text-sm font-medium text-zinc-400">${escapeHtml(channel.label || channel.id || '未知通道')}</p>
-            ${verifyBadge}
-            ${trustBadge}
-          </div>
-          <p class="mt-3 text-2xl font-semibold ${statusClass}">${statusText}</p>
-        </div>
-        <span class="mt-1 h-3 w-3 shrink-0 rounded-full ${dotClass}"></span>
+    return `<article class="flex h-full min-h-[330px] flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
+      <div class="flex items-center justify-between gap-4">
+        <p class="min-w-0 truncate text-sm font-medium text-zinc-400">${escapeHtml(channel.label || channel.id || '未知通道')}</p>
+        <span class="h-3 w-3 shrink-0 rounded-full ${dotClass}"></span>
       </div>
-      <p class="mt-3 text-xs text-zinc-500">${escapeHtml(lastSeen)}</p>
-      <p class="mt-2 min-h-10 break-words text-xs leading-5 text-zinc-600">${escapeHtml(channel.reason || '')}${verification.detail ? ' · ' + escapeHtml(verification.detail) : ''}</p>
-      <div class="mt-5 grid grid-cols-3 gap-3 text-xs">
-        <div class="rounded-md bg-zinc-950/40 px-3 py-2">
+      <div class="mt-4 flex min-h-8 flex-wrap items-start gap-2">
+        ${verifyBadge}
+        ${trustBadge}
+      </div>
+      <div class="mt-5">
+        <p class="text-2xl font-semibold ${statusClass}">${statusText}</p>
+        <p class="mt-4 text-xs text-zinc-500">${escapeHtml(lastSeen)}</p>
+        <div class="mt-3 min-h-16">
+          <p class="break-words text-xs leading-5 text-zinc-600">${escapeHtml(channel.reason || '')}${verification.detail ? ' · ' + escapeHtml(verification.detail) : ''}</p>
+        </div>
+      </div>
+      <div class="mt-auto grid grid-cols-3 gap-3 pt-6 text-xs">
+        <div class="min-h-[70px] rounded-md bg-zinc-950/40 px-3 py-3">
           <p class="text-zinc-600">今日</p>
           <p class="mt-1 font-semibold text-zinc-200">${escapeHtml(stats.todayMessages ?? '-')}</p>
         </div>
-        <div class="rounded-md bg-zinc-950/40 px-3 py-2">
+        <div class="min-h-[70px] rounded-md bg-zinc-950/40 px-3 py-3">
           <p class="text-zinc-600">1 小时</p>
           <p class="mt-1 font-semibold text-zinc-200">${escapeHtml(stats.lastHourMessages ?? '-')}</p>
         </div>
-        <div class="rounded-md bg-zinc-950/40 px-3 py-2">
+        <div class="min-h-[70px] rounded-md bg-zinc-950/40 px-3 py-3">
           <p class="text-zinc-600">错误</p>
           <p class="mt-1 font-semibold text-rose-300">${escapeHtml(stats.errorCount ?? '-')}</p>
         </div>
@@ -1235,13 +1237,13 @@ async function loadMetrics() {
           const user = escapeHtml(p.user);
           const memMb = escapeHtml(p.memMb);
 
-          return `<div class="grid gap-3 rounded-md border border-white/5 bg-white/[0.025] px-4 py-3 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
+          return `<div class="grid gap-3 rounded-md border border-white/5 bg-white/[0.025] px-4 py-3 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
             <div class="min-w-0">
               <p class="truncate font-medium text-zinc-300" title="${name}">${name}${p.count > 1 ? ' <span class="text-xs font-normal text-zinc-500">×' + p.count + '</span>' : ''}</p>
             </div>
-            <div class="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:gap-1">
-              <span class="rounded-md bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-500">${user}</span>
-              <span class="font-mono text-sm font-semibold text-amber-300">${memMb} MB</span>
+            <div class="grid grid-cols-[minmax(0,1fr)_88px] items-center gap-3">
+              <span class="truncate rounded-md bg-white/[0.04] px-2.5 py-1 text-center text-xs text-zinc-500">${user}</span>
+              <span class="text-right font-mono text-sm font-semibold tabular-nums text-amber-300">${memMb} MB</span>
             </div>
           </div>`
         }).join('');

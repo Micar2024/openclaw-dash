@@ -198,12 +198,12 @@ function createUpdateService (deps) {
 
   async function buildUpdatePreflight () {
     const [gatewayProcesses, disk, localVersion, latestRelease, compatibility, diagnostics] = await Promise.all([
-      deps.getGatewayProcesses(),
-      getDiskInfo(),
-      deps.getLocalVersion(),
-      deps.getLatestReleaseInfo(),
-      deps.buildCompatibilityReport(),
-      deps.buildDiagnostics()
+      deps.getGatewayProcesses().catch(() => []),
+      getDiskInfo().catch(() => ({ freeGb: null, usedPercent: null })),
+      deps.getLocalVersion().catch(() => null),
+      deps.getLatestReleaseInfo().catch(() => ({ latestVersion: null, releaseUrl: null, source: null })),
+      deps.buildCompatibilityReport().catch(() => ({ ok: false, passed: 0, required: 1, checks: [] })),
+      deps.buildDiagnostics().catch(() => ({ openclawProbe: {}, recommendations: [] }))
     ]);
     disk.ok = disk.freeGb == null ? false : disk.freeGb >= 2;
     const updateAvailable = Boolean(deps.parseVersion(localVersion) && deps.parseVersion(latestRelease.latestVersion) && deps.isVersionGreater(latestRelease.latestVersion, localVersion));

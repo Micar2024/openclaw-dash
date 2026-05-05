@@ -549,7 +549,7 @@ module.exports = {
   isValidSessionToken,
   maskableExportPatterns: [
     'ou_* / cli_* identifiers',
-    'long numeric identifiers',
+    'very long numeric identifiers',
     'IPv4 addresses',
     'PID values',
     '/Users/* paths'

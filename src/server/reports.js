@@ -33,7 +33,7 @@ async function buildMarkdownReport (deps) {
   lines.push('# OpenClaw Dash 诊断报告');
   lines.push('');
   lines.push(`生成时间：${new Date().toLocaleString()}`);
-  lines.push('脱敏状态：已自动遮蔽常见 token、open_id、IP、邮箱、长数字标识和本机路径。');
+  lines.push('脱敏状态：已自动遮蔽常见 token、open_id、IP、邮箱、超长数字标识和本机路径。');
   lines.push('容错策略：单个数据源采集失败不会阻止报告生成，失败项会在对应章节标注。');
   lines.push('');
   lines.push('## 今日摘要');

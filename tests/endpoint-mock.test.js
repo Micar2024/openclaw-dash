@@ -194,7 +194,7 @@ echo "{}"
     assert.match(report.body, /排障路径/);
     assert.match(report.body, /脱敏状态/);
     assert.match(report.body, /容错策略/);
-    assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|123456789|ABCdefghijklmnopqrstuvwxyz|638d64ce/);
+    assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|ABCdefghijklmnopqrstuvwxyz|638d64ce/);
     assert.match(report.body, /\| Email \| online \|/);
 
     const bundle = await request(server, '/api/support-bundle.tgz', { headers });
