@@ -207,12 +207,18 @@ The server is organized as a route aggregator plus focused support modules under
 - `runtime.js` for filesystem and system-command helpers.
 - `processes.js` for process/memory display helpers.
 - `realtime.js` for WebSocket state streaming.
+- `reports.js` for Markdown report rendering.
+- `timeline.js` for fault timeline aggregation.
 - `routes/auth.js` for authentication endpoints.
 - `routes/gateway.js` for Gateway status and control endpoints.
 - `routes/channels.js` for channel status and real probe endpoints.
 - `routes/metrics.js` for dashboard metrics.
 - `routes/updates.js` for update and preflight endpoints.
-- `routes/product.js` for setup, health summary, and Markdown report export.
+- `routes/diagnostics.js` for diagnostics, model, compatibility, and config health endpoints.
+- `routes/logs.js` for audit, timeline, errors, and log mute rules.
+- `routes/product.js` for setup and health summary endpoints.
+- `routes/reports.js` for export endpoints.
+- `routes/version.js` for local/upstream version and version source endpoints.
 
 ## Releases
 

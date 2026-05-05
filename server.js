@@ -42,12 +42,18 @@ const {
 } = require('./src/server/runtime');
 const { getTopMemoryProcesses } = require('./src/server/processes');
 const { attachRealtimeServer } = require('./src/server/realtime');
+const { buildMarkdownReport } = require('./src/server/reports');
+const { buildTimeline } = require('./src/server/timeline');
 const { registerAuthRoutes } = require('./src/server/routes/auth');
 const { registerChannelRoutes } = require('./src/server/routes/channels');
+const { registerDiagnosticsRoutes } = require('./src/server/routes/diagnostics');
 const { registerGatewayRoutes } = require('./src/server/routes/gateway');
+const { registerLogRoutes } = require('./src/server/routes/logs');
 const { registerMetricsRoutes } = require('./src/server/routes/metrics');
 const { registerProductRoutes } = require('./src/server/routes/product');
+const { registerReportRoutes } = require('./src/server/routes/reports');
 const { registerUpdateRoutes } = require('./src/server/routes/updates');
+const { registerVersionRoutes } = require('./src/server/routes/version');
 
 const app = express();
 const DASHBOARD_TOKEN = resolveDashboardToken();
@@ -543,12 +549,22 @@ function persistLatestReleaseInfo (info) {
   return info;
 }
 
-app.get('/api/version', (req, res) => {
-  execFile(OPENCLAW_BIN, ['--version'], { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 5000 }, (error, stdout, stderr) => {
-    if (error) return res.json({ installed: false, version: null, message: '未检测到 openclaw，或执行 openclaw --version 时发生错误。', detail: stderr ? stderr.trim() : error.message });
-    res.json({ installed: true, version: stdout.trim() || '未知版本', message: '已检测到本地 openclaw。' });
+function getLocalVersionStatus () {
+  return new Promise((resolve) => {
+    execFile(OPENCLAW_BIN, ['--version'], { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 5000 }, (error, stdout, stderr) => {
+      if (error) {
+        resolve({
+          installed: false,
+          version: null,
+          message: '未检测到 openclaw，或执行 openclaw --version 时发生错误。',
+          detail: stderr ? stderr.trim() : error.message
+        });
+        return;
+      }
+      resolve({ installed: true, version: stdout.trim() || '未知版本', message: '已检测到本地 openclaw。' });
+    });
   });
-});
+}
 
 function getLocalVersion () {
   return new Promise((resolve) => {
@@ -623,16 +639,6 @@ async function getLatestReleaseInfo () {
     source: cachedVersion ? 'update-check-cache' : 'unavailable'
   };
 }
-
-app.get('/api/check-update', async (req, res) => {
-  try {
-    const latestRelease = await getLatestReleaseInfo();
-    if (!latestRelease.latestVersion) return res.status(502).json({ success: false, latestVersion: null, message: '无法获取最新版本信息，请稍后重试。' });
-    res.json({ success: true, latestVersion: latestRelease.latestVersion, releaseName: '', releaseUrl: latestRelease.releaseUrl || '', publishedAt: latestRelease.publishedAt || '', source: latestRelease.source });
-  } catch (error) {
-    res.status(502).json({ success: false, latestVersion: null, message: '无法获取 GitHub 最新 Release 信息，请稍后重试。', detail: error.response?.data?.message || error.message });
-  }
-});
 
 function checkGatewayStatus () {
   return getGatewayProcesses().then((processes) => processes.length > 0);
@@ -1020,33 +1026,6 @@ async function checkChannelsStatus (probe = null) {
   return { feishu: feishu.status, telegram: telegram.status, detail: { feishu, telegram } };
 }
 
-app.get('/api/model', async (req, res) => {
-  try { res.json(await getCurrentModelInfo()); } catch (error) { res.status(500).json({ error: error.message }); }
-});
-
-app.get('/api/diagnostics', async (req, res) => {
-  try {
-    res.json(await buildDiagnostics());
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/diagnostics/probe', async (req, res) => {
-  try {
-    const diagnostics = await buildDiagnostics();
-    appendAudit(req, 'diagnostics.probe', true, {
-      gatewayRunning: diagnostics.gateway.isRunning,
-      feishuDirectOk: diagnostics.feishuDirect?.ok,
-      feishuProbeOk: diagnostics.openclawProbe?.channels?.feishu?.probe?.ok
-    });
-    res.json(diagnostics);
-  } catch (error) {
-    appendAudit(req, 'diagnostics.probe', false, { error: error.message });
-    res.status(500).json({ error: error.message });
-  }
-});
-
 function assertOpenClawAvailable () {
   return new Promise((resolve, reject) => {
     fs.access(OPENCLAW_BIN, fs.constants.X_OK, (error) => {
@@ -1339,15 +1318,6 @@ async function readRecentErrorEntriesWithMeta (maxLines = 1000, maxResults = 10)
   return { errors, mutedCount, activeRules: muteRules };
 }
 
-app.get('/api/audit', async (req, res) => {
-  try {
-    const entries = await readAuditEntries(30);
-    res.json({ entries, count: entries.length });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 async function buildMetrics () {
   const processes = await getGatewayProcesses();
   const gwProc = processes[0] || null;
@@ -1427,79 +1397,6 @@ async function buildMetrics () {
   const updateAvailable = Boolean(parseVersion(localVersion) && parseVersion(latestRelease.latestVersion) && isVersionGreater(latestRelease.latestVersion, localVersion));
   return { gateway, channels, disk, memory, memoryProcesses, version: { local: localVersion, latest: latestRelease.latestVersion, updateAvailable, releaseUrl: latestRelease.releaseUrl, publishedAt: latestRelease.publishedAt, source: latestRelease.source }, model, collectedAt: new Date().toISOString() };
 }
-
-app.get('/api/timeline', async (req, res) => {
-  try {
-    const [auditEntries, errorEntries, channels, gatewayRunning] = await Promise.all([
-      readAuditEntries(20),
-      readRecentErrorEntries(1200, 12),
-      checkChannelsStatus(),
-      checkGatewayStatus()
-    ]);
-
-    const events = [];
-    const now = new Date().toISOString();
-
-    events.push({
-      timestamp: now,
-      type: gatewayRunning ? 'gateway.ok' : 'gateway.offline',
-      level: gatewayRunning ? 'ok' : 'critical',
-      title: gatewayRunning ? 'Gateway 正在运行' : 'Gateway 未运行',
-      detail: gatewayRunning ? '当前进程检测正常。' : '未检测到 Gateway 进程。',
-      source: 'runtime'
-    });
-
-    for (const channel of ['feishu', 'telegram']) {
-      const detail = channels.detail?.[channel] || {};
-      events.push({
-        timestamp: detail.lastSeenAt || now,
-        type: `channel.${channel}.${detail.status || 'unknown'}`,
-        level: detail.status === 'online' ? 'ok' : 'warning',
-        title: `${channel === 'feishu' ? '飞书' : 'Telegram'}通道 ${detail.status === 'online' ? '在线' : '离线'}`,
-        detail: detail.reason || detail.lastError || '无更多细节。',
-        source: 'channel'
-      });
-    }
-
-    for (const entry of auditEntries) {
-      events.push({
-        timestamp: entry.timestamp,
-        type: entry.action,
-        level: entry.success ? 'info' : 'warning',
-        title: `操作：${entry.action}`,
-        detail: `${entry.success ? '成功' : '失败'} · ${String(entry.ip || 'unknown').replace(/^::ffff:/, '')}`,
-        source: 'audit'
-      });
-    }
-
-    for (const error of errorEntries) {
-      events.push({
-        timestamp: error.timestamp || now,
-        type: 'log.error',
-        level: 'warning',
-        title: `错误日志：${error.source}`,
-        detail: error.message,
-        source: 'logs'
-      });
-    }
-
-    for (const step of updateJob.steps || []) {
-      events.push({
-        timestamp: step.timestamp,
-        type: `update.${step.status}`,
-        level: step.status === 'error' ? 'critical' : step.status === 'warning' ? 'warning' : 'info',
-        title: `更新步骤：${step.name}`,
-        detail: step.detail || step.status,
-        source: 'update'
-      });
-    }
-
-    events.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
-    res.json({ events: events.slice(0, 40), collectedAt: now });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 async function runCommandCheck (name, file, args, timeoutMs = 12000, json = false) {
   return new Promise((resolve) => {
@@ -1753,109 +1650,6 @@ async function buildHealthSummary () {
   return { score, level, summary, checks, collectedAt: new Date().toISOString() };
 }
 
-function markdownEscape (value) {
-  return String(value ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
-}
-
-async function buildMarkdownReport () {
-  const [metrics, diagnostics, health, errors] = await Promise.all([
-    buildMetrics(),
-    buildDiagnostics(),
-    buildHealthSummary(),
-    readRecentErrorEntriesWithMeta(1000, 8)
-  ]);
-  const lines = [];
-  lines.push('# OpenClaw Dash 诊断报告');
-  lines.push('');
-  lines.push(`生成时间：${new Date().toLocaleString()}`);
-  lines.push('');
-  lines.push('## 今日摘要');
-  lines.push('');
-  lines.push(`- 健康分：${health.score}/100`);
-  lines.push(`- 结论：${health.summary}`);
-  lines.push('');
-  lines.push('## Gateway');
-  lines.push('');
-  lines.push(`- 状态：${metrics.gateway.isRunning ? 'Running' : 'Stopped'}`);
-  lines.push(`- PID：${metrics.gateway.pid || '-'}`);
-  lines.push(`- 运行时长：${metrics.gateway.uptime || '-'}`);
-  lines.push(`- 内存：${metrics.gateway.memoryRssMb || '-'} MB`);
-  lines.push('');
-  lines.push('## 版本');
-  lines.push('');
-  lines.push(`- 本地版本：${metrics.version.local || '-'}`);
-  lines.push(`- 最新版本：${metrics.version.latest || '-'}`);
-  lines.push(`- 有可用更新：${metrics.version.updateAvailable ? '是' : '否'}`);
-  lines.push(`- 来源：${metrics.version.source || '-'}`);
-  lines.push('');
-  lines.push('## 通道');
-  lines.push('');
-  lines.push('| 通道 | 状态 | 最近活动 | 今日消息 | 最近 1 小时 | 错误 |');
-  lines.push('| --- | --- | --- | ---: | ---: | ---: |');
-  for (const [name, channel] of Object.entries(metrics.channels)) {
-    lines.push(`| ${markdownEscape(name)} | ${markdownEscape(channel.status)} | ${markdownEscape(channel.lastSeenAt || '-')} | ${channel.stats?.todayMessages ?? '-'} | ${channel.stats?.lastHourMessages ?? '-'} | ${channel.stats?.errorCount ?? '-'} |`);
-  }
-  lines.push('');
-  lines.push('## 系统资源');
-  lines.push('');
-  lines.push(`- 磁盘：可用 ${metrics.disk.freeGb ?? '-'} GB，已用 ${metrics.disk.usedPercent ?? '-'}%`);
-  lines.push(`- 内存：已用 ${metrics.memory.usedGb ?? '-'} GB / ${metrics.memory.totalGb ?? '-'} GB（${metrics.memory.usedPercent ?? '-'}%）`);
-  lines.push('');
-  lines.push('## 诊断建议');
-  lines.push('');
-  for (const item of diagnostics.recommendations || []) {
-    lines.push(`- ${item.title}：${item.detail}`);
-  }
-  lines.push('');
-  lines.push('## 近期错误');
-  lines.push('');
-  if (!errors.errors.length) {
-    lines.push('- 暂无未静音错误。');
-  } else {
-    for (const entry of errors.errors) {
-      lines.push(`- ${entry.timestamp || '-'} · ${entry.source}: ${entry.message}`);
-    }
-  }
-  lines.push('');
-  return `${lines.join('\n')}\n`;
-}
-
-app.get('/api/compatibility', async (req, res) => {
-  try { res.json(await buildCompatibilityReport()); } catch (error) { res.status(500).json({ error: error.message }); }
-});
-
-app.get('/api/version/sources', async (req, res) => {
-  try { res.json(await buildVersionSourcesHealth()); } catch (error) { res.status(500).json({ error: error.message }); }
-});
-
-app.get('/api/config/health', (req, res) => {
-  try { res.json(buildConfigHealth()); } catch (error) { res.status(500).json({ error: error.message }); }
-});
-
-app.get('/api/errors', async (req, res) => {
-  try {
-    const result = await readRecentErrorEntriesWithMeta(1000, 10);
-    res.json({ count: result.errors.length, mutedCount: result.mutedCount, activeMuteRules: result.activeRules, errors: result.errors, collectedAt: new Date().toISOString() });
-  } catch (error) { res.status(500).json({ error: error.message }); }
-});
-
-app.get('/api/log-rules', (req, res) => {
-  const rules = loadLogMuteRules();
-  res.json({ rules, activeCount: rules.filter((rule) => rule.enabled).length });
-});
-
-app.post('/api/log-rules', (req, res) => {
-  const { id, enabled } = req.body || {};
-  const rules = loadLogMuteRules();
-  const target = rules.find((rule) => rule.id === id);
-  if (!target) return res.status(404).json({ success: false, message: '未知日志降噪规则。' });
-
-  target.enabled = Boolean(enabled);
-  persistLogMuteRules(rules);
-  appendAudit(req, 'log-rule.update', true, { id, enabled: target.enabled });
-  res.json({ success: true, rules });
-});
-
 registerAuthRoutes(app, {
   appendAudit,
   clearSessionCookie,
@@ -1880,6 +1674,20 @@ registerChannelRoutes(app, {
   verifyChannel
 });
 
+registerVersionRoutes(app, {
+  buildVersionSourcesHealth,
+  getLatestReleaseInfo,
+  getLocalVersionStatus
+});
+
+registerDiagnosticsRoutes(app, {
+  appendAudit,
+  buildCompatibilityReport,
+  buildConfigHealth,
+  buildDiagnostics,
+  getCurrentModelInfo
+});
+
 registerUpdateRoutes(app, {
   appendAudit,
   assertOpenClawAvailable,
@@ -1894,8 +1702,31 @@ registerMetricsRoutes(app, { buildMetrics });
 
 registerProductRoutes(app, {
   buildHealthSummary,
-  buildMarkdownReport,
   buildSetupStatus
+});
+
+registerLogRoutes(app, {
+  appendAudit,
+  buildTimeline: () => buildTimeline({
+    checkChannelsStatus,
+    checkGatewayStatus,
+    getUpdateSteps: () => updateJob.steps || [],
+    readAuditEntries,
+    readRecentErrorEntries
+  }),
+  loadLogMuteRules,
+  persistLogMuteRules,
+  readAuditEntries,
+  readRecentErrorEntriesWithMeta
+});
+
+registerReportRoutes(app, {
+  buildMarkdownReport: () => buildMarkdownReport({
+    buildDiagnostics,
+    buildHealthSummary,
+    buildMetrics,
+    readRecentErrorEntriesWithMeta
+  })
 });
 
 async function collectRealtimeSnapshot () {
