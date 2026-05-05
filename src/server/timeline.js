@@ -18,13 +18,15 @@ async function buildTimeline (deps) {
     source: 'runtime'
   });
 
-  for (const channel of ['feishu', 'telegram']) {
-    const detail = channels.detail?.[channel] || {};
+  const channelItems = Array.isArray(channels.items) && channels.items.length
+    ? channels.items
+    : Object.entries(channels.detail || {}).map(([id, value]) => ({ id, ...value }));
+  for (const detail of channelItems) {
     events.push({
       timestamp: detail.lastSeenAt || now,
-      type: `channel.${channel}.${detail.status || 'unknown'}`,
+      type: `channel.${detail.id}.${detail.status || 'unknown'}`,
       level: detail.status === 'online' ? 'ok' : 'warning',
-      title: `${channel === 'feishu' ? '飞书' : 'Telegram'}通道 ${detail.status === 'online' ? '在线' : '离线'}`,
+      title: `${detail.label || detail.id}通道 ${detail.status === 'online' ? '在线' : '离线'}`,
       detail: detail.reason || detail.lastError || '无更多细节。',
       source: 'channel'
     });

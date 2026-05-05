@@ -268,59 +268,7 @@
             <p id="channels-updated-at" class="text-sm text-zinc-500">等待刷新</p>
           </div>
 
-          <div class="grid gap-5 md:grid-cols-2">
-            <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-              <div class="flex items-center justify-between gap-4">
-                <div>
-                  <p class="text-sm font-medium text-zinc-400">飞书通道</p>
-                  <p id="feishu-status" class="mt-3 text-2xl font-semibold text-zinc-300">Loading...</p>
-                </div>
-                <span id="feishu-dot" class="h-3 w-3 rounded-full bg-zinc-600"></span>
-              </div>
-              <p id="feishu-last-seen" class="mt-3 text-xs text-zinc-500"></p>
-              <p id="feishu-reason" class="mt-2 min-h-5 text-xs leading-5 text-zinc-600"></p>
-              <div class="mt-5 grid grid-cols-3 gap-3 text-xs">
-                <div class="rounded-md bg-zinc-950/40 px-3 py-2">
-                  <p class="text-zinc-600">今日</p>
-                  <p id="feishu-today" class="mt-1 font-semibold text-zinc-200">-</p>
-                </div>
-                <div class="rounded-md bg-zinc-950/40 px-3 py-2">
-                  <p class="text-zinc-600">1 小时</p>
-                  <p id="feishu-hour" class="mt-1 font-semibold text-zinc-200">-</p>
-                </div>
-                <div class="rounded-md bg-zinc-950/40 px-3 py-2">
-                  <p class="text-zinc-600">错误</p>
-                  <p id="feishu-errors" class="mt-1 font-semibold text-rose-300">-</p>
-                </div>
-              </div>
-            </article>
-
-            <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-              <div class="flex items-center justify-between gap-4">
-                <div>
-                  <p class="text-sm font-medium text-zinc-400">Telegram 通道</p>
-                  <p id="telegram-status" class="mt-3 text-2xl font-semibold text-zinc-300">Loading...</p>
-                </div>
-                <span id="telegram-dot" class="h-3 w-3 rounded-full bg-zinc-600"></span>
-              </div>
-              <p id="telegram-last-seen" class="mt-3 text-xs text-zinc-500"></p>
-              <p id="telegram-reason" class="mt-2 min-h-5 text-xs leading-5 text-zinc-600"></p>
-              <div class="mt-5 grid grid-cols-3 gap-3 text-xs">
-                <div class="rounded-md bg-zinc-950/40 px-3 py-2">
-                  <p class="text-zinc-600">今日</p>
-                  <p id="telegram-today" class="mt-1 font-semibold text-zinc-200">-</p>
-                </div>
-                <div class="rounded-md bg-zinc-950/40 px-3 py-2">
-                  <p class="text-zinc-600">1 小时</p>
-                  <p id="telegram-hour" class="mt-1 font-semibold text-zinc-200">-</p>
-                </div>
-                <div class="rounded-md bg-zinc-950/40 px-3 py-2">
-                  <p class="text-zinc-600">错误</p>
-                  <p id="telegram-errors" class="mt-1 font-semibold text-rose-300">-</p>
-                </div>
-              </div>
-            </article>
-          </div>
+          <div id="channels-grid" class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"></div>
         </div>
 
         <!-- Health Diagnostics -->
@@ -672,7 +620,7 @@
       const configHealthListEl = document.getElementById('config-health-list');
       const logRulesPillEl = document.getElementById('log-rules-pill');
       const logRulesListEl = document.getElementById('log-rules-list');
-      const feishuStatusEl = document.getElementById('feishu-status');
+      const channelsGridEl = document.getElementById('channels-grid');
       const modelCurrentEl = document.getElementById('model-current');
       const modelSourceEl = document.getElementById('model-source');
       const modelProviderEl = document.getElementById('model-provider');
@@ -680,19 +628,6 @@
       const modelMaxTokensEl = document.getElementById('model-max-tokens');
       const modelReasoningEl = document.getElementById('model-reasoning');
       const modelFallbacksEl = document.getElementById('model-fallbacks');
-      const feishuDotEl = document.getElementById('feishu-dot');
-      const feishuLastSeenEl = document.getElementById('feishu-last-seen');
-      const feishuReasonEl = document.getElementById('feishu-reason');
-      const feishuTodayEl = document.getElementById('feishu-today');
-      const feishuHourEl = document.getElementById('feishu-hour');
-      const feishuErrorsEl = document.getElementById('feishu-errors');
-      const telegramStatusEl = document.getElementById('telegram-status');
-      const telegramDotEl = document.getElementById('telegram-dot');
-      const telegramLastSeenEl = document.getElementById('telegram-last-seen');
-      const telegramReasonEl = document.getElementById('telegram-reason');
-      const telegramTodayEl = document.getElementById('telegram-today');
-      const telegramHourEl = document.getElementById('telegram-hour');
-      const telegramErrorsEl = document.getElementById('telegram-errors');
       const channelsUpdatedAtEl = document.getElementById('channels-updated-at');
       const gatewayStatusEl = document.getElementById('gateway-status');
       const gatewayDotEl = document.getElementById('gateway-dot');
@@ -972,26 +907,60 @@
         }
       }
 
-      function renderChannel(element, dotElement, status) {
-        const isOnline = status === 'online';
-
-        element.textContent = isOnline ? 'Online' : 'Offline';
-        element.className = `mt-3 text-2xl font-semibold ${
-          isOnline ? 'text-emerald-500' : 'text-rose-500'
-        }`;
-        dotElement.className = `h-3 w-3 rounded-full ${
-          isOnline ? 'bg-emerald-500' : 'bg-rose-500'
-        }`;
+      function normalizeChannelItems(source) {
+        if (!source) return [];
+        if (Array.isArray(source.channelItems)) return source.channelItems;
+        if (Array.isArray(source.items)) return source.items;
+        if (source.detail) return Object.entries(source.detail).map(([id, value]) => ({ id, ...value }));
+        return [];
       }
 
-      function renderChannelStats(prefix, stats) {
-        const map = prefix === 'feishu'
-          ? { today: feishuTodayEl, hour: feishuHourEl, errors: feishuErrorsEl }
-          : { today: telegramTodayEl, hour: telegramHourEl, errors: telegramErrorsEl };
+      function renderChannels(channels) {
+        const items = normalizeChannelItems(channels);
+        if (!items.length) {
+          channelsGridEl.innerHTML = '<article class="rounded-lg border border-white/10 bg-white/[0.04] p-6 text-sm text-zinc-500">未发现已配置通道。</article>';
+          return;
+        }
 
-        map.today.textContent = stats ? stats.todayMessages : '-';
-        map.hour.textContent = stats ? stats.lastHourMessages : '-';
-        map.errors.textContent = stats ? stats.errorCount : '-';
+        channelsGridEl.innerHTML = items.map((channel) => {
+          const isOnline = channel.status === 'online';
+          const statusText = isOnline ? 'Online' : 'Offline';
+          const statusClass = isOnline ? 'text-emerald-500' : 'text-rose-500';
+          const dotClass = isOnline ? 'bg-emerald-500' : 'bg-rose-500';
+          const stats = channel.stats || {};
+          const lastSeen = channel.lastSeenAt ? '最后活动: ' + new Date(channel.lastSeenAt).toLocaleString() : '暂无活动时间';
+          const verifyBadge = channel.supportsVerify
+            ? '<span class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">支持真实验证</span>'
+            : '<span class="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-500">日志/探针监测</span>';
+          return `<article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="text-sm font-medium text-zinc-400">${escapeHtml(channel.label || channel.id || '未知通道')}</p>
+                  ${verifyBadge}
+                </div>
+                <p class="mt-3 text-2xl font-semibold ${statusClass}">${statusText}</p>
+              </div>
+              <span class="mt-1 h-3 w-3 shrink-0 rounded-full ${dotClass}"></span>
+            </div>
+            <p class="mt-3 text-xs text-zinc-500">${escapeHtml(lastSeen)}</p>
+            <p class="mt-2 min-h-10 break-words text-xs leading-5 text-zinc-600">${escapeHtml(channel.reason || '')}</p>
+            <div class="mt-5 grid grid-cols-3 gap-3 text-xs">
+              <div class="rounded-md bg-zinc-950/40 px-3 py-2">
+                <p class="text-zinc-600">今日</p>
+                <p class="mt-1 font-semibold text-zinc-200">${escapeHtml(stats.todayMessages ?? '-')}</p>
+              </div>
+              <div class="rounded-md bg-zinc-950/40 px-3 py-2">
+                <p class="text-zinc-600">1 小时</p>
+                <p class="mt-1 font-semibold text-zinc-200">${escapeHtml(stats.lastHourMessages ?? '-')}</p>
+              </div>
+              <div class="rounded-md bg-zinc-950/40 px-3 py-2">
+                <p class="text-zinc-600">错误</p>
+                <p class="mt-1 font-semibold text-rose-300">${escapeHtml(stats.errorCount ?? '-')}</p>
+              </div>
+            </div>
+          </article>`;
+        }).join('');
       }
 
       function renderGatewayRunning(isRunning, updateMessage = true) {
@@ -1246,12 +1215,10 @@
           const response = await authFetch('/api/channels');
           const data = await response.json();
 
-          renderChannel(feishuStatusEl, feishuDotEl, data.feishu);
-          renderChannel(telegramStatusEl, telegramDotEl, data.telegram);
+          renderChannels(data);
           channelsUpdatedAtEl.textContent = `更新于 ${new Date().toLocaleTimeString()}`;
         } catch (error) {
-          renderChannel(feishuStatusEl, feishuDotEl, 'offline');
-          renderChannel(telegramStatusEl, telegramDotEl, 'offline');
+          renderChannels([]);
           channelsUpdatedAtEl.textContent = '刷新失败';
         }
       }
@@ -1586,19 +1553,7 @@
             gatewayMetricsEl.classList.add('hidden');
           }
 
-          // Channel last seen
-          if (data.channels) {
-            if (data.channels.feishu.lastSeenAt) {
-              feishuLastSeenEl.textContent = '最后活动: ' + new Date(data.channels.feishu.lastSeenAt).toLocaleString();
-            }
-            feishuReasonEl.textContent = data.channels.feishu.reason || '';
-            if (data.channels.telegram.lastSeenAt) {
-              telegramLastSeenEl.textContent = '最后活动: ' + new Date(data.channels.telegram.lastSeenAt).toLocaleString();
-            }
-            telegramReasonEl.textContent = data.channels.telegram.reason || '';
-            renderChannelStats('feishu', data.channels.feishu.stats);
-            renderChannelStats('telegram', data.channels.telegram.stats);
-          }
+          renderChannels(data);
 
           // Version update bar
           if (data.version) {
@@ -1742,21 +1697,7 @@
           renderGatewayRunning(Boolean(snapshot.gateway.isRunning), false);
         }
         if (snapshot.channels) {
-          renderChannel(feishuStatusEl, feishuDotEl, snapshot.channels.feishu);
-          renderChannel(telegramStatusEl, telegramDotEl, snapshot.channels.telegram);
-          const detail = snapshot.channels.detail || {};
-          if (detail.feishu) {
-            feishuLastSeenEl.textContent = detail.feishu.lastSeenAt
-              ? '最后活动: ' + new Date(detail.feishu.lastSeenAt).toLocaleString()
-              : '';
-            feishuReasonEl.textContent = detail.feishu.reason || '';
-          }
-          if (detail.telegram) {
-            telegramLastSeenEl.textContent = detail.telegram.lastSeenAt
-              ? '最后活动: ' + new Date(detail.telegram.lastSeenAt).toLocaleString()
-              : '';
-            telegramReasonEl.textContent = detail.telegram.reason || '';
-          }
+          renderChannels(snapshot.channels);
           channelsUpdatedAtEl.textContent = snapshot.collectedAt
             ? `实时更新于 ${new Date(snapshot.collectedAt).toLocaleTimeString()}`
             : `实时更新于 ${new Date().toLocaleTimeString()}`;

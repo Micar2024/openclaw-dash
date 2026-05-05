@@ -249,8 +249,11 @@ async function buildHealthSummary () {
   }
 
   addCheck('Gateway', metrics.gateway.isRunning, metrics.gateway.isRunning ? `PID ${metrics.gateway.pid || '-'}` : '未检测到 Gateway 进程。', 35);
-  addCheck('飞书通道', metrics.channels.feishu.status === 'online', metrics.channels.feishu.reason || metrics.channels.feishu.status, 15);
-  addCheck('Telegram 通道', metrics.channels.telegram.status === 'online', metrics.channels.telegram.reason || metrics.channels.telegram.status, 15);
+  const channelItems = Array.isArray(metrics.channelItems) && metrics.channelItems.length ? metrics.channelItems : Object.entries(metrics.channels || {}).map(([id, value]) => ({ id, ...value }));
+  const channelPenalty = channelItems.length ? Math.max(5, Math.floor(30 / channelItems.length)) : 0;
+  for (const channel of channelItems) {
+    addCheck(`${channel.label || channel.id}通道`, channel.status === 'online', channel.reason || channel.status, channelPenalty);
+  }
   addCheck('磁盘空间', Number(metrics.disk.usedPercent || 0) < 90, `已用 ${metrics.disk.usedPercent ?? '-'}%`, Number(metrics.disk.usedPercent || 0) > 75 ? 10 : 5);
   addCheck('版本状态', !metrics.version.updateAvailable, metrics.version.updateAvailable ? `${metrics.version.local} → ${metrics.version.latest}` : '当前版本未发现更新。', 5);
 
@@ -277,6 +280,7 @@ async function buildHealthSummary () {
 }
 
 const { buildMetrics } = createMetricsService({
+  checkChannelsStatus,
   getCachedOpenClawChannelProbe,
   getChannelHealth,
   getChannelMessageStats,

@@ -90,16 +90,12 @@ function createMetricsService (deps) {
     }
 
     const channelProbe = await deps.getCachedOpenClawChannelProbe();
-    const [feishuHealth, telegramHealth, feishuStats, telegramStats] = await Promise.all([
-      deps.getChannelHealth('feishu', channelProbe),
-      deps.getChannelHealth('telegram', channelProbe),
-      deps.getChannelMessageStats('feishu'),
-      deps.getChannelMessageStats('telegram')
-    ]);
-    const channels = {
-      feishu: { ...feishuHealth, stats: feishuStats },
-      telegram: { ...telegramHealth, stats: telegramStats }
-    };
+    const channelStatus = await deps.checkChannelsStatus(channelProbe);
+    const channelItems = await Promise.all((channelStatus.items || []).map(async (health) => ({
+      ...health,
+      stats: await deps.getChannelMessageStats(health.id)
+    })));
+    const channels = Object.fromEntries(channelItems.map((item) => [item.id, item]));
     const disk = await getDiskInfo();
     const [localVersion, latestRelease, model, memory, memoryProcesses] = await Promise.all([
       deps.getLocalVersion(),
@@ -113,6 +109,7 @@ function createMetricsService (deps) {
     return {
       gateway,
       channels,
+      channelItems,
       disk,
       memory,
       memoryProcesses,

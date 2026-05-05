@@ -346,12 +346,14 @@ async function buildCompatibilityReport () {
 
   const probe = await runCommandCheck('channels status --probe --json 结构', OPENCLAW_BIN, ['channels', 'status', '--probe', '--json'], 35000, true);
   const channels = probe.data?.channels || {};
-  const schemaOk = Boolean(probe.ok && channels.feishu?.probe && channels.telegram?.probe);
+  const channelNames = Object.keys(channels);
+  const schemaOk = Boolean(probe.ok && channelNames.length && channelNames.every((name) => typeof channels[name] === 'object'));
   checks.push({
     ...probe,
     ok: schemaOk,
-    requiredFields: ['channels.feishu.probe', 'channels.telegram.probe'],
-    error: schemaOk ? null : (probe.error || 'JSON 缺少看板依赖的通道 probe 字段。')
+    requiredFields: ['channels.<name>'],
+    detectedChannels: channelNames,
+    error: schemaOk ? null : (probe.error || 'JSON 缺少 channels 通道状态对象。')
   });
 
   const required = checks.length;

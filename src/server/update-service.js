@@ -207,13 +207,17 @@ function createUpdateService (deps) {
     ]);
     disk.ok = disk.freeGb == null ? false : disk.freeGb >= 2;
     const updateAvailable = Boolean(deps.parseVersion(localVersion) && deps.parseVersion(latestRelease.latestVersion) && deps.isVersionGreater(latestRelease.latestVersion, localVersion));
+    const probeChannels = Object.entries(diagnostics.openclawProbe?.channels || {}).map(([name, channel]) => ({
+      name: `${name} 探针`,
+      ok: Boolean(channel?.probe?.ok || channel?.connected || channel?.running),
+      detail: channel?.probe?.error || channel?.lastError || 'OK'
+    }));
     const checks = [
       { name: '版本差异', ok: updateAvailable, detail: updateAvailable ? `${localVersion} → ${latestRelease.latestVersion}` : '当前未检测到可用更新。' },
       { name: '磁盘空间', ok: disk.ok, detail: disk.freeGb == null ? '无法读取磁盘空间。' : `可用 ${disk.freeGb} GB，已用 ${disk.usedPercent}%` },
       { name: 'Gateway 状态', ok: true, detail: gatewayProcesses.length ? `当前运行中，升级会先停止再恢复。PID ${gatewayProcesses[0].pid}` : '当前未运行，升级后会保持停止状态。' },
       { name: 'CLI 兼容性', ok: compatibility.ok, detail: `${compatibility.passed}/${compatibility.required} 项通过` },
-      { name: '飞书探针', ok: Boolean(diagnostics.openclawProbe?.channels?.feishu?.probe?.ok), detail: diagnostics.openclawProbe?.channels?.feishu?.probe?.error || 'OK' },
-      { name: 'Telegram 探针', ok: Boolean(diagnostics.openclawProbe?.channels?.telegram?.probe?.ok), detail: diagnostics.openclawProbe?.channels?.telegram?.probe?.error || 'OK' }
+      ...(probeChannels.length ? probeChannels : [{ name: '通道探针', ok: false, detail: diagnostics.openclawProbe?.error || '未检测到通道探针结果。' }])
     ];
     return {
       ok: checks.every((check) => check.ok || check.name === 'Gateway 状态'),

@@ -15,10 +15,11 @@ A lightweight local diagnostic toolkit for the OpenClaw community. Open the dash
 
 - Local version and upstream version monitoring with GitHub, npm, and dashboard cache fallback.
 - Gateway start, restart, stop, and update workflow with step-by-step progress.
-- Feishu, Telegram, and Gateway diagnostics using OpenClaw CLI probes and direct API checks.
+- Dynamic channel diagnostics using OpenClaw CLI probes, logs, and direct API checks where supported.
 - Compatibility self-check for the OpenClaw CLI commands the dashboard depends on.
 - Update preflight checks for version diff, disk space, CLI compatibility, Gateway state, and channel probes.
 - Channel stats, recent errors, operation audit log, and fault timeline.
+- Dynamic channel grid for Feishu, Telegram, Email, and future OpenClaw channels discovered from config/probe output.
 - WebSocket realtime push for Gateway and channel state, with polling as a fallback.
 - Memory and disk monitoring for macOS.
 - Read-only configuration health view for channel enablement, allowlist counts, and `blockStreaming`.

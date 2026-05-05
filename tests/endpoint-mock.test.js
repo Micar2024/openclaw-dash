@@ -102,7 +102,7 @@ if [ "$1" = "--version" ]; then
   exit 0
 fi
 if [ "$1" = "channels" ] && [ "$2" = "status" ]; then
-  echo '{"channels":{"feishu":{"probe":{"ok":true}},"telegram":{"probe":{"ok":true}}}}'
+  echo '{"channels":{"feishu":{"probe":{"ok":true}},"telegram":{"probe":{"ok":true}},"email":{"probe":{"ok":true},"running":true}}}'
   exit 0
 fi
 if [ "$1" = "daemon" ]; then
@@ -118,8 +118,9 @@ echo "{}"
 
   writeFile(path.join(tempHome, '.openclaw/openclaw.json'), JSON.stringify({
     channels: {
-      feishu: { enabled: false, allowFrom: ['ou_mock'], appId: 'cli_mock' },
-      telegram: { enabled: false, allowFrom: ['123456'] }
+      feishu: { enabled: true, allowFrom: ['ou_mock'], appId: 'cli_mock' },
+      telegram: { enabled: true, allowFrom: ['123456'] },
+      email: { enabled: true, allowFrom: ['test@example.com'] }
     },
     plugins: { entries: {} }
   }));
@@ -152,6 +153,8 @@ echo "{}"
     assert.strictEqual(channels.status, 200);
     assert.strictEqual(channels.json.feishu, 'online');
     assert.strictEqual(channels.json.telegram, 'online');
+    assert.strictEqual(channels.json.detail.email.status, 'online');
+    assert.ok(channels.json.items.some((channel) => channel.id === 'email'));
 
     const config = await request(server, '/api/config/health', { headers });
     assert.strictEqual(config.status, 200);
@@ -182,6 +185,7 @@ echo "{}"
     assert.match(report.body, /脱敏状态/);
     assert.match(report.body, /容错策略/);
     assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|123456789|ABCdefghijklmnopqrstuvwxyz|638d64ce/);
+    assert.match(report.body, /\| Email \| online \|/);
 
     const bundle = await request(server, '/api/support-bundle.tgz', { headers });
     assert.strictEqual(bundle.status, 200);
@@ -201,6 +205,7 @@ echo "{}"
     const snapshot = await waitForRealtimeSnapshot(server, 'endpoint-mock-token');
     assert.strictEqual(snapshot.channels.feishu, 'online');
     assert.strictEqual(snapshot.channels.telegram, 'online');
+    assert.ok(snapshot.channels.items.some((channel) => channel.id === 'email'));
   } finally {
     await new Promise((resolve) => server.close(resolve));
     fs.rmSync(tempHome, { recursive: true, force: true });

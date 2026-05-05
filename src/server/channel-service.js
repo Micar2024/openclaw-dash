@@ -8,9 +8,16 @@ const {
 const { readJsonFile, readTail } = require('./runtime');
 
 function createChannelService (deps) {
-  const channelAlertState = {
-    feishu: { initialized: false, offlineSince: null, alerted: false },
-    telegram: { initialized: false, offlineSince: null, alerted: false }
+  const channelAlertState = {};
+  const channelLabels = {
+    feishu: '飞书',
+    lark: '飞书',
+    telegram: 'Telegram',
+    email: 'Email',
+    slack: 'Slack',
+    discord: 'Discord',
+    wechat: '微信',
+    wecom: '企业微信'
   };
 
   function extractTimestamp (line) {
@@ -36,7 +43,50 @@ function createChannelService (deps) {
   function getChannelKeywords (channel) {
     if (channel === 'feishu') return ['feishu', 'lark', '飞书'];
     if (channel === 'telegram') return ['telegram', 'tg'];
-    return [channel];
+    return [channel, channelLabels[channel]].filter(Boolean).map((item) => String(item).toLowerCase());
+  }
+
+  function normalizeChannelId (channel) {
+    const id = String(channel || '').trim().toLowerCase();
+    return id === 'lark' ? 'feishu' : id;
+  }
+
+  function getChannelLabel (channel) {
+    return channelLabels[channel] || channel.replace(/(^|[-_])([a-z])/g, (_, sep, char) => (sep ? ' ' : '') + char.toUpperCase());
+  }
+
+  function supportsRealVerify (channel) {
+    return ['feishu', 'telegram'].includes(channel);
+  }
+
+  function getConfiguredChannels () {
+    const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
+    const channels = config.channels && typeof config.channels === 'object' ? Object.keys(config.channels) : [];
+    return channels.map(normalizeChannelId).filter(Boolean);
+  }
+
+  function getChannelConfig (channel) {
+    const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
+    const channels = config.channels && typeof config.channels === 'object' ? config.channels : {};
+    return channels[channel] || (channel === 'feishu' ? channels.lark : null) || {};
+  }
+
+  function getProbeChannels (probe) {
+    const names = new Set();
+    for (const key of Object.keys(probe?.channels || {})) names.add(normalizeChannelId(key));
+    for (const key of Object.keys(probe?.channelAccounts || {})) names.add(normalizeChannelId(key));
+    return [...names].filter(Boolean);
+  }
+
+  function getKnownChannels (probe = null) {
+    const names = new Set([...getConfiguredChannels(), ...getProbeChannels(probe), 'feishu', 'telegram']);
+    return [...names]
+      .map(normalizeChannelId)
+      .filter(Boolean)
+      .sort((a, b) => {
+        const priority = { feishu: 0, telegram: 1 };
+        return (priority[a] ?? 20) - (priority[b] ?? 20) || a.localeCompare(b);
+      });
   }
 
   function isChannelRelatedLine (channel, line) {
@@ -99,14 +149,20 @@ function createChannelService (deps) {
     const lastError = channelProbe.lastError || account.lastError || null;
     const status = configured && (probeOk || connected || running) ? 'online' : 'offline';
 
+    const label = getChannelLabel(channel);
+    const onlineReason = probeOk ? 'probe.ok' : connected ? 'connected' : 'running';
+
     return {
+      id: channel,
+      label,
+      supportsVerify: supportsRealVerify(channel),
       status,
       lastSeenAt,
       lastSignalAt: status === 'online' ? lastSeenAt : null,
       lastErrorAt: null,
       lastError,
       reason: status === 'online'
-        ? `OpenClaw CLI 探针确认 ${channel === 'telegram' ? 'Telegram' : '飞书'} ${probeOk ? 'probe.ok' : connected ? 'connected' : 'running'}。`
+        ? `OpenClaw CLI 探针确认 ${label} ${onlineReason}。`
         : (configured ? (lastError || 'OpenClaw CLI 探针未确认通道在线。') : 'OpenClaw CLI 显示通道未配置。')
     };
   }
@@ -134,6 +190,21 @@ function createChannelService (deps) {
   }
 
   async function getChannelHealth (channel, probe = null) {
+    const channelConfig = getChannelConfig(channel);
+    if (channelConfig.enabled === false) {
+      return {
+        id: channel,
+        label: getChannelLabel(channel),
+        supportsVerify: supportsRealVerify(channel),
+        status: 'offline',
+        lastSeenAt: null,
+        lastSignalAt: null,
+        lastErrorAt: null,
+        lastError: null,
+        reason: '配置中该通道未启用。'
+      };
+    }
+
     const content = await readTail(LOG_PATH, CHANNEL_STATS_TAIL_LINES);
     const related = content.split(/\r?\n/).filter((line) => isChannelRelatedLine(channel, line));
     const positivePattern = /(^|[^a-z0-9])(connected|online|success|running|started|active|login|logged\s*in|ready|authenticated|received|message|reaction|event|dispatch(?:ing)?|provider|register(?:ed|ing)?|command|menu|listening)(?=$|[^a-z0-9])/i;
@@ -164,6 +235,9 @@ function createChannelService (deps) {
     const status = lastSignalLine && !errorIsLater ? 'online' : 'offline';
 
     const logHealth = {
+      id: channel,
+      label: getChannelLabel(channel),
+      supportsVerify: supportsRealVerify(channel),
       status,
       lastSeenAt: lastSeenAt || lastSignalAt || lastErrorAt || null,
       lastSignalAt,
@@ -301,11 +375,16 @@ function createChannelService (deps) {
 
   async function checkChannelsStatus (probe = null) {
     const channelProbe = probe || await deps.getCachedOpenClawChannelProbe();
-    const [feishu, telegram] = await Promise.all([
-      getChannelHealth('feishu', channelProbe),
-      getChannelHealth('telegram', channelProbe)
-    ]);
-    return { feishu: feishu.status, telegram: telegram.status, detail: { feishu, telegram } };
+    const ids = getKnownChannels(channelProbe);
+    const healthEntries = await Promise.all(ids.map(async (id) => [id, await getChannelHealth(id, channelProbe)]));
+    const detail = Object.fromEntries(healthEntries);
+    const items = healthEntries.map(([, health]) => health);
+    return {
+      feishu: detail.feishu?.status || 'offline',
+      telegram: detail.telegram?.status || 'offline',
+      detail,
+      items
+    };
   }
 
   async function runChannelWatchdogCheck () {
@@ -313,10 +392,10 @@ function createChannelService (deps) {
       const channels = await checkChannelsStatus();
       const now = Date.now();
 
-      for (const channel of ['feishu', 'telegram']) {
+      for (const channel of (channels.items || []).map((item) => item.id)) {
         const health = channels.detail?.[channel] || {};
-        const state = channelAlertState[channel];
-        const label = channel === 'feishu' ? '飞书通道' : 'Telegram 通道';
+        const state = channelAlertState[channel] || (channelAlertState[channel] = { initialized: false, offlineSince: null, alerted: false });
+        const label = `${health.label || getChannelLabel(channel)}通道`;
 
         if (health.status === 'online') {
           state.initialized = true;
@@ -346,6 +425,7 @@ function createChannelService (deps) {
 
   return {
     checkChannelsStatus,
+    getKnownChannels,
     getChannelHealth,
     getChannelMessageStats,
     inferLatestChannelStatus,

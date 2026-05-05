@@ -68,8 +68,9 @@ async function buildMarkdownReport (deps) {
   if (metricsResult.ok) {
     lines.push('| 通道 | 状态 | 最近活动 | 今日消息 | 最近 1 小时 | 错误 |');
     lines.push('| --- | --- | --- | ---: | ---: | ---: |');
-    for (const [name, channel] of Object.entries(metrics.channels || {})) {
-      lines.push(`| ${markdownEscape(name)} | ${markdownEscape(channel.status)} | ${markdownEscape(channel.lastSeenAt || '-')} | ${channel.stats?.todayMessages ?? '-'} | ${channel.stats?.lastHourMessages ?? '-'} | ${channel.stats?.errorCount ?? '-'} |`);
+    const channelItems = Array.isArray(metrics.channelItems) && metrics.channelItems.length ? metrics.channelItems : Object.entries(metrics.channels || {}).map(([id, value]) => ({ id, ...value }));
+    for (const channel of channelItems) {
+      lines.push(`| ${markdownEscape(channel.label || channel.id)} | ${markdownEscape(channel.status)} | ${markdownEscape(channel.lastSeenAt || '-')} | ${channel.stats?.todayMessages ?? '-'} | ${channel.stats?.lastHourMessages ?? '-'} | ${channel.stats?.errorCount ?? '-'} |`);
     }
   } else {
     lines.push(`- 通道信息采集失败：${markdownEscape(metricsResult.error)}`);
