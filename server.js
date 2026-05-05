@@ -30,6 +30,7 @@ const { createChannelService } = require('./src/server/channel-service');
 const { createGatewayService } = require('./src/server/gateway-service');
 const { createMetricsService } = require('./src/server/metrics-service');
 const { createUpdateService } = require('./src/server/update-service');
+const { redactSensitiveText } = require('./src/server/redaction');
 const {
   buildVersionSourcesHealth,
   getLatestReleaseInfo,
@@ -171,7 +172,7 @@ async function readRecentErrorEntriesWithMeta (maxLines = 1000, maxResults = 10)
         mutedCount++;
         continue;
       }
-      matches.push({ timestamp: extractTimestamp(line), source: path.basename(filePath), message: line.trim().slice(0, 500) });
+      matches.push({ timestamp: extractTimestamp(line), source: path.basename(filePath), message: redactSensitiveText(line.trim()).slice(0, 500) });
     }
     return matches;
   }

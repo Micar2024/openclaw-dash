@@ -1,7 +1,7 @@
 {
   "name": "openclaw-dash",
   "version": "1.0.0",
-  "description": "A local macOS dashboard for monitoring and controlling OpenClaw Gateway.",
+  "description": "A lightweight local diagnostic toolkit for OpenClaw support reports.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

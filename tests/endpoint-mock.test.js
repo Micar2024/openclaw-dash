@@ -98,7 +98,8 @@ echo "{}"
   writeFile(path.join(tempHome, '.openclaw/logs/gateway.log'), [
     '2026-05-05T10:00:00 [feishu] connected',
     '2026-05-05T10:00:01 [gateway] telegram polling logs are quiet in this fixture',
-    '2026-05-05T10:00:02 agent model: mock/provider'
+    '2026-05-05T10:00:02 agent model: mock/provider',
+    '2026-05-05T10:00:03 error token=abc123secret path=/Users/alice/.openclaw/openclaw.json open_id=ou_mocksecret ip=192.168.1.2 chat=123456789 url=https://api.telegram.org/bot123456789:ABCdefghijklmnopqrstuvwxyz/getMe runId=638d64ce-b68a-4157-bbe3-6e2829d0888b'
   ].join('\n'));
 
   const { startDashboard } = require('../server');
@@ -150,6 +151,8 @@ echo "{}"
     assert.strictEqual(report.status, 200);
     assert.match(report.body, /OpenClaw Dash 诊断报告/);
     assert.match(report.body, /Gateway/);
+    assert.match(report.body, /脱敏状态/);
+    assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|123456789|ABCdefghijklmnopqrstuvwxyz|638d64ce/);
 
     const snapshot = await waitForRealtimeSnapshot(server, 'endpoint-mock-token');
     assert.strictEqual(snapshot.channels.feishu, 'online');

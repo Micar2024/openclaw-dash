@@ -26,7 +26,7 @@ A lightweight local diagnostic toolkit for the OpenClaw community. Open the dash
 - High-resolution long screenshot export with automatic masking for common private identifiers.
 - First-run wizard for OpenClaw CLI, Gateway, log paths, config readability, token, LaunchAgent, and access mode.
 - Health score and daily summary across Gateway, channels, version, disk, and recent errors.
-- Markdown report export for diagnostics, version, channel, resource, and error summaries.
+- Markdown report export for diagnostics, version, channel, resource, and redacted error summaries.
 
 ![Realtime monitoring flow](docs/images/realtime-flow.svg)
 
@@ -234,13 +234,14 @@ Authentication design:
 - Session cookies are HMAC-SHA256 signed with the dashboard token and checked with `crypto.timingSafeEqual`.
 - Operations are appended to `~/.openclaw/dash-audit.log`.
 
-Screenshot export masks these patterns in the exported copy:
+Screenshot and Markdown report export mask these patterns in the exported copy:
 
 - Feishu/OpenClaw IDs beginning with `ou_` or `cli_`.
 - Long numeric identifiers.
 - IPv4 addresses.
 - `PID: <number>` values.
 - Local `/Users/...` filesystem paths.
+- Common token/secret strings, email addresses, and Telegram-style bot tokens.
 
 ## Development
 
