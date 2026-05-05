@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# OpenClaw Dash — 一键安装脚本
-# 用法: curl -fsSL https://raw.githubusercontent.com/Micar2024/openclaw-dash/main/install.sh | bash
+# OpenClaw Dash — one-line installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/Micar2024/openclaw-dash/main/install.sh | bash
 set -euo pipefail
 
 DASH_DIR="${HOME}/openclaw-dash"
@@ -15,50 +15,50 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "==> OpenClaw Dash 安装向导"
-echo "    目标目录: ${DASH_DIR}"
+echo "==> OpenClaw Dash installer"
+echo "    Target directory: ${DASH_DIR}"
 echo ""
 
-# 检查依赖
+# Check dependencies
 if ! command -v node >/dev/null 2>&1; then
-  echo "✗ 未检测到 Node.js。请先安装 Node.js 18+ (推荐 https://nodejs.org)" >&2
+  echo "✗ Node.js was not found. Please install Node.js 18+ first (https://nodejs.org recommended)" >&2
   exit 1
 fi
 
 NODE_VER=$(node -v | sed 's/v//' | cut -d. -f1)
 if [ "$NODE_VER" -lt 18 ]; then
-  echo "✗ Node.js 版本过低: $(node -v)，需要 18+" >&2
+  echo "✗ Node.js version is too old: $(node -v), requires 18+" >&2
   exit 1
 fi
 echo "✓ Node.js $(node -v)"
 
-# 检查 OpenClaw CLI
+# Check OpenClaw CLI
 OPENCLAW_BIN="${HOME}/.npm-global/bin/openclaw"
 if [ ! -x "$OPENCLAW_BIN" ]; then
   OPENCLAW_BIN=$(command -v openclaw || true)
 fi
 if [ -z "$OPENCLAW_BIN" ]; then
-  echo "! 未检测到 openclaw 命令，请确认 OpenClaw 已安装"
-  echo "  Dashboard 部分功能（Gateway 控制、通道诊断）可能不可用"
+  echo "! openclaw command was not found; please confirm OpenClaw is installed"
+  echo "  Some dashboard features (Gateway control and channel diagnostics) may be unavailable"
 else
   echo "✓ openclaw: $OPENCLAW_BIN"
 fi
 
-# 下载/更新源码
+# Download/update source
 if command -v git >/dev/null 2>&1; then
   if [ -d "$DASH_DIR" ]; then
     if [ ! -d "${DASH_DIR}/.git" ]; then
       BACKUP_DIR="${DASH_DIR}.backup.$(date +%Y%m%d%H%M%S)"
-      echo "==> 检测到已有非 git 目录，先备份到 ${BACKUP_DIR}"
+      echo "==> Existing non-git directory detected; backing it up to ${BACKUP_DIR}"
       mv "$DASH_DIR" "$BACKUP_DIR"
-      echo "==> git 克隆仓库..."
+      echo "==> Cloning repository with git..."
       git clone --depth 1 --branch "$BRANCH" "$REPO" "$DASH_DIR"
     else
-      echo "==> 检测到已有安装，安全更新..."
+      echo "==> Existing install detected; updating safely..."
       cd "$DASH_DIR"
       if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "✗ ${DASH_DIR} 存在未提交改动，安装脚本不会覆盖它们。" >&2
-        echo "  请先提交/备份本地改动，或换一个目录后再安装。" >&2
+        echo "✗ ${DASH_DIR} has uncommitted changes; the installer will not overwrite them." >&2
+        echo "  Please commit/back up local changes, or install into a different directory." >&2
         exit 1
       fi
       git fetch --depth 1 origin "$BRANCH"
@@ -70,14 +70,14 @@ if command -v git >/dev/null 2>&1; then
       git merge --ff-only "origin/$BRANCH"
     fi
   else
-    echo "==> git 克隆仓库..."
+    echo "==> Cloning repository with git..."
     git clone --depth 1 --branch "$BRANCH" "$REPO" "$DASH_DIR"
   fi
 else
-  echo "==> git 不可用，使用 curl 下载压缩包..."
+  echo "==> git is unavailable; downloading tarball with curl..."
   if [ -d "$DASH_DIR" ]; then
     BACKUP_DIR="${DASH_DIR}.backup.$(date +%Y%m%d%H%M%S)"
-    echo "==> 检测到已有目录，先备份到 ${BACKUP_DIR}"
+    echo "==> Existing directory detected; backing it up to ${BACKUP_DIR}"
     mv "$DASH_DIR" "$BACKUP_DIR"
   fi
   TMP_DIR="$(mktemp -d)"
@@ -88,26 +88,26 @@ fi
 
 cd "$DASH_DIR"
 
-# 安装依赖与本地前端资产。这里保留 devDependencies，因为 Tailwind 构建需要它。
-echo "==> 安装依赖并构建本地资源..."
+# Install dependencies and local frontend assets. devDependencies are kept because the Tailwind build needs them.
+echo "==> Installing dependencies and building local assets..."
 npm install
 npm run build:assets
 
-# 设置 LaunchAgent（macOS 自启动）
+# Set up LaunchAgent (macOS auto-start)
 if [[ "$(uname)" == "Darwin" ]]; then
-  echo "==> 设置 macOS 自启动..."
+  echo "==> Setting up macOS auto-start..."
   chmod +x scripts/install-macos.sh
   OPENCLAW_DASH_SKIP_NPM_INSTALL=1 bash scripts/install-macos.sh
 else
-  echo "==> 非 macOS 系统，跳过自启动安装。"
-  echo "    手动启动: cd ${DASH_DIR} && npm start"
+  echo "==> Non-macOS system detected; skipping auto-start setup."
+  echo "    Manual start: cd ${DASH_DIR} && npm start"
 fi
 
 echo ""
-echo "✅ 安装完成！"
-echo "   地址: http://127.0.0.1:3000"
+echo "✅ Installation complete!"
+echo "   URL: http://127.0.0.1:3000"
 if [ -f "${HOME}/.openclaw/dash-token" ]; then
-  echo "   远程登录 Token 路径: ${HOME}/.openclaw/dash-token"
+  echo "   Remote login token path: ${HOME}/.openclaw/dash-token"
 fi
 echo ""
-echo "   出问题了？打开看板导出脱敏诊断报告，然后贴到社区求助。"
+echo "   Need help? Open the dashboard, export a redacted diagnostic report, and paste it into the community."

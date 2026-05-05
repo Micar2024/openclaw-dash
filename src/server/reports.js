@@ -30,103 +30,103 @@ async function buildMarkdownReport (deps) {
   const troubleshooting = troubleshootingResult.data || {};
   const errors = errorsResult.data || { errors: [] };
   const lines = [];
-  lines.push('# OpenClaw Dash 诊断报告');
+  lines.push('# OpenClaw Dash Diagnostic Report');
   lines.push('');
-  lines.push(`生成时间：${new Date().toLocaleString()}`);
-  lines.push('脱敏状态：已自动遮蔽常见 token、open_id、IP、邮箱、超长数字标识和本机路径。');
-  lines.push('容错策略：单个数据源采集失败不会阻止报告生成，失败项会在对应章节标注。');
+  lines.push(`Generated at: ${new Date().toLocaleString()}`);
+  lines.push('Redaction: common tokens, open_id values, IPs, emails, very long numeric identifiers, and local paths are masked automatically.');
+  lines.push('Fault tolerance: a failed data source does not block report generation; failures are marked in their sections.');
   lines.push('');
-  lines.push('## 今日摘要');
+  lines.push('## Summary');
   lines.push('');
   if (healthResult.ok) {
-    lines.push(`- 健康分：${health.score}/100`);
-    lines.push(`- 结论：${markdownEscape(health.summary)}`);
+    lines.push(`- Health score: ${health.score}/100`);
+    lines.push(`- Conclusion: ${markdownEscape(health.summary)}`);
   } else {
-    lines.push(`- 健康摘要采集失败：${markdownEscape(healthResult.error)}`);
+    lines.push(`- Health summary collection failed: ${markdownEscape(healthResult.error)}`);
   }
   lines.push('');
   lines.push('## Gateway');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push(`- 状态：${markdownEscape(metrics.gateway?.isRunning ? 'Running' : 'Stopped')}`);
+    lines.push(`- Status: ${markdownEscape(metrics.gateway?.isRunning ? 'Running' : 'Stopped')}`);
     lines.push(`- ${markdownEscape(`PID: ${metrics.gateway?.pid || '-'}`)}`);
-    lines.push(`- 运行时长：${markdownEscape(metrics.gateway?.uptime || '-')}`);
-    lines.push(`- 内存：${markdownEscape(metrics.gateway?.memoryRssMb || '-')} MB`);
+    lines.push(`- Uptime: ${markdownEscape(metrics.gateway?.uptime || '-')}`);
+    lines.push(`- Memory: ${markdownEscape(metrics.gateway?.memoryRssMb || '-')} MB`);
   } else {
-    lines.push(`- Gateway 指标采集失败：${markdownEscape(metricsResult.error)}`);
+    lines.push(`- Gateway metrics collection failed: ${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## 官方 Control UI');
+  lines.push('## Official Control UI');
   lines.push('');
   if (officialResult.ok) {
-    lines.push(`- URL：${markdownEscape(official.url || '-')}`);
-    lines.push(`- 可达：${official.reachable ? '是' : '否'}`);
-    lines.push(`- HTTP：${markdownEscape(official.httpStatus || '-')}`);
-    lines.push(`- Auth：${official.auth?.configured ? '已配置' : '未检测到显式配置'}（mode: ${markdownEscape(official.auth?.mode || '-')}）`);
-    lines.push(`- 建议：${markdownEscape(official.recommendation || '-')}`);
+    lines.push(`- URL: ${markdownEscape(official.url || '-')}`);
+    lines.push(`- Reachable: ${official.reachable ? 'Yes' : 'No'}`);
+    lines.push(`- HTTP: ${markdownEscape(official.httpStatus || '-')}`);
+    lines.push(`- Auth: ${official.auth?.configured ? 'Configured' : 'No explicit config found'} (mode: ${markdownEscape(official.auth?.mode || '-')})`);
+    lines.push(`- Recommendation: ${markdownEscape(official.recommendation || '-')}`);
   } else {
-    lines.push(`- 官方 Control UI 状态采集失败：${markdownEscape(officialResult.error)}`);
+    lines.push(`- Official Control UI status collection failed: ${markdownEscape(officialResult.error)}`);
   }
   lines.push('');
-  lines.push('## 排障路径');
+  lines.push('## Troubleshooting Path');
   lines.push('');
   if (troubleshootingResult.ok) {
     for (const step of troubleshooting.steps || []) {
-      lines.push(`- ${markdownEscape(step.title)}：${markdownEscape(step.detail)}`);
+      lines.push(`- ${markdownEscape(step.title)}: ${markdownEscape(step.detail)}`);
     }
   } else {
-    lines.push(`- 排障路径采集失败：${markdownEscape(troubleshootingResult.error)}`);
+    lines.push(`- Troubleshooting path collection failed: ${markdownEscape(troubleshootingResult.error)}`);
   }
   lines.push('');
-  lines.push('## 版本');
+  lines.push('## Version');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push(`- 本地版本：${markdownEscape(metrics.version?.local || '-')}`);
-    lines.push(`- 最新版本：${markdownEscape(metrics.version?.latest || '-')}`);
-    lines.push(`- 有可用更新：${metrics.version?.updateAvailable ? '是' : '否'}`);
-    lines.push(`- 来源：${markdownEscape(metrics.version?.source || '-')}`);
+    lines.push(`- Local version: ${markdownEscape(metrics.version?.local || '-')}`);
+    lines.push(`- Latest version: ${markdownEscape(metrics.version?.latest || '-')}`);
+    lines.push(`- Update available: ${metrics.version?.updateAvailable ? 'Yes' : 'No'}`);
+    lines.push(`- Source: ${markdownEscape(metrics.version?.source || '-')}`);
   } else {
-    lines.push(`- 版本信息采集失败：${markdownEscape(metricsResult.error)}`);
+    lines.push(`- Version collection failed: ${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## 通道');
+  lines.push('## Channels');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push('| 通道 | 状态 | 可信度 | 最近活动 | 今日消息 | 最近 1 小时 | 错误 |');
+    lines.push('| Channel | Status | Confidence | Last Activity | Today | Last Hour | Errors |');
     lines.push('| --- | --- | --- | --- | ---: | ---: | ---: |');
     const channelItems = Array.isArray(metrics.channelItems) && metrics.channelItems.length ? metrics.channelItems : Object.entries(metrics.channels || {}).map(([id, value]) => ({ id, ...value }));
     for (const channel of channelItems) {
       lines.push(`| ${markdownEscape(channel.label || channel.id)} | ${markdownEscape(channel.status)} | ${markdownEscape(channel.verification?.label || '-')} | ${markdownEscape(channel.lastSeenAt || '-')} | ${channel.stats?.todayMessages ?? '-'} | ${channel.stats?.lastHourMessages ?? '-'} | ${channel.stats?.errorCount ?? '-'} |`);
     }
   } else {
-    lines.push(`- 通道信息采集失败：${markdownEscape(metricsResult.error)}`);
+    lines.push(`- Channel collection failed: ${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## 系统资源');
+  lines.push('## System Resources');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push(`- 磁盘：可用 ${markdownEscape(metrics.disk?.freeGb ?? '-')} GB，已用 ${markdownEscape(metrics.disk?.usedPercent ?? '-')}%`);
-    lines.push(`- 内存：已用 ${markdownEscape(metrics.memory?.usedGb ?? '-')} GB / ${markdownEscape(metrics.memory?.totalGb ?? '-')} GB（${markdownEscape(metrics.memory?.usedPercent ?? '-')}%）`);
+    lines.push(`- Disk: Free ${markdownEscape(metrics.disk?.freeGb ?? '-')} GB, Used ${markdownEscape(metrics.disk?.usedPercent ?? '-')}%`);
+    lines.push(`- Memory: Used ${markdownEscape(metrics.memory?.usedGb ?? '-')} GB / ${markdownEscape(metrics.memory?.totalGb ?? '-')} GB (${markdownEscape(metrics.memory?.usedPercent ?? '-')}%)`);
   } else {
-    lines.push(`- 系统资源采集失败：${markdownEscape(metricsResult.error)}`);
+    lines.push(`- System resources collection failed: ${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## 诊断建议');
+  lines.push('## Recommendations');
   lines.push('');
   if (diagnosticsResult.ok) {
     for (const item of diagnostics.recommendations || []) {
-      lines.push(`- ${markdownEscape(item.title)}：${markdownEscape(item.detail)}`);
+      lines.push(`- ${markdownEscape(item.title)}: ${markdownEscape(item.detail)}`);
     }
   } else {
-    lines.push(`- 诊断建议采集失败：${markdownEscape(diagnosticsResult.error)}`);
+    lines.push(`- Recommendation collection failed: ${markdownEscape(diagnosticsResult.error)}`);
   }
   lines.push('');
-  lines.push('## 近期错误');
+  lines.push('## Recent Errors');
   lines.push('');
   if (!errorsResult.ok) {
-    lines.push(`- 错误日志采集失败：${markdownEscape(errorsResult.error)}`);
+    lines.push(`- Error log collection failed: ${markdownEscape(errorsResult.error)}`);
   } else if (!errors.errors.length) {
-    lines.push('- 暂无未静音错误。');
+    lines.push('- No unmuted errors.');
   } else {
     for (const entry of errors.errors) {
       lines.push(`- ${markdownEscape(entry.timestamp || '-')} · ${markdownEscape(entry.source)}: ${markdownEscape(entry.message)}`);
@@ -216,7 +216,7 @@ async function buildSupportBundle (deps) {
 
   for (const result of results) {
     if (result.name === 'report.md') {
-      files.push({ name: result.name, content: result.ok ? result.data : `# OpenClaw Dash 诊断报告\n\n报告生成失败：${markdownEscape(result.error)}\n` });
+      files.push({ name: result.name, content: result.ok ? result.data : `# OpenClaw Dash Diagnostic Report\n\nReport generation failed: ${markdownEscape(result.error)}\n` });
       continue;
     }
     files.push({

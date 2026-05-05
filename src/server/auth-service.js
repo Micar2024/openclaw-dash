@@ -24,11 +24,11 @@ function createAuthService () {
       ensureParentDir(TOKEN_PATH);
       const generatedToken = crypto.randomBytes(24).toString('base64url');
       fs.writeFileSync(TOKEN_PATH, `${generatedToken}\n`, { mode: 0o600 });
-      console.log(`[Auth] 首次启动，已生成访问令牌并写入 ${TOKEN_PATH}`);
+      console.log(`[Auth] First run: access token generated and written to ${TOKEN_PATH}`);
       return generatedToken;
     } catch (error) {
-      console.error('[Auth] 访问口令文件初始化失败:', error.message);
-      throw new Error(`无法写入或读取访问口令文件 ${TOKEN_PATH}: ${error.message}。请检查文件权限。`);
+      console.error('[Auth] Access token file initialization failed:', error.message);
+      throw new Error(`Unable to write or read access token file ${TOKEN_PATH}: ${error.message}. Please check file permissions.`);
     }
   }
 
@@ -131,7 +131,7 @@ function createAuthService () {
       ensureParentDir(AUDIT_LOG_PATH);
       fs.appendFile(AUDIT_LOG_PATH, `${JSON.stringify(entry)}\n`, () => {});
     } catch (error) {
-      console.error('[Audit] 写入失败:', error.message);
+      console.error('[Audit] Write failed:', error.message);
     }
   }
 

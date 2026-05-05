@@ -16,7 +16,7 @@ function createDefaultUpdateJob () {
     startedAt: null,
     finishedAt: null,
     steps: [],
-    message: '暂无更新任务。',
+    message: 'No update job.',
     error: null,
     postUpdateDiagnostics: null
   };
@@ -31,12 +31,12 @@ function loadPersistedUpdateJob () {
     job.running = false;
     job.status = 'error';
     job.finishedAt = new Date().toISOString();
-    job.message = '看板服务重启，上一轮更新状态未能确认。';
+    job.message = 'Dashboard restarted; the previous update status could not be confirmed.';
     job.postUpdateDiagnostics = null;
     job.steps = [...job.steps, {
-      name: '看板服务重启',
+      name: 'Dashboard Restarted',
       status: 'warning',
-      detail: '更新任务运行期间 dashboard 进程重启，无法确认该任务是否完整结束。请手动运行升级后复检。',
+      detail: 'The dashboard process restarted during the update job, so completion cannot be confirmed. Please run the post-update check manually.',
       timestamp: job.finishedAt
     }];
   }
@@ -46,9 +46,9 @@ function loadPersistedUpdateJob () {
   if (job.postUpdateDiagnostics && (!diagnosticsAt || (finishedAt && diagnosticsAt < finishedAt))) {
     job.postUpdateDiagnostics = null;
     job.steps = [...job.steps, {
-      name: '复检结果已失效',
+      name: 'Post-check Result Expired',
       status: 'warning',
-      detail: '持久化的升级后复检时间早于任务结束时间，已忽略旧结果。请重新运行升级后复检。',
+      detail: 'The persisted post-update check is older than the job finish time and was ignored. Please rerun the post-update check.',
       timestamp: new Date().toISOString()
     }];
   }
@@ -74,7 +74,7 @@ function execOpenClawUpdate () {
       try {
         resolve({ success: true, output, data: JSON.parse(stdout.trim()) });
       } catch {
-        resolve({ success: true, output, data: { message: output.trim() || 'openclaw update 已执行。' } });
+        resolve({ success: true, output, data: { message: output.trim() || 'openclaw update completed.' } });
       }
     });
   });
@@ -96,7 +96,7 @@ function createUpdateService (deps) {
       ensureParentDir(UPDATE_JOB_PATH);
       fs.writeFileSync(UPDATE_JOB_PATH, `${JSON.stringify(updateJob, null, 2)}\n`, { mode: 0o600 });
     } catch (error) {
-      console.error('[UpdateJob] 状态持久化失败:', error.message);
+      console.error('[UpdateJob] Failed to persist status:', error.message);
     }
   }
 
@@ -108,7 +108,7 @@ function createUpdateService (deps) {
       startedAt: new Date().toISOString(),
       finishedAt: null,
       steps: [],
-      message: '更新任务已开始。',
+      message: 'Update job started.',
       error: null,
       postUpdateDiagnostics: null
     };
@@ -141,35 +141,35 @@ function createUpdateService (deps) {
 
   async function runUpdateJob (req, shouldRestartGateway) {
     try {
-      addUpdateStep('停止 Gateway', 'running');
+      addUpdateStep('Stop Gateway', 'running');
       if (shouldRestartGateway) {
         await deps.runGatewayControl('stop');
-        addUpdateStep('停止 Gateway', 'success', 'Gateway 已停止。');
+        addUpdateStep('Stop Gateway', 'success', 'Gateway stopped.');
       } else {
-        addUpdateStep('停止 Gateway', 'skipped', 'Gateway 原本未运行，跳过停止步骤。');
+        addUpdateStep('Stop Gateway', 'skipped', 'Gateway was already stopped; stop step skipped.');
       }
 
-      addUpdateStep('更新 OpenClaw', 'running');
+      addUpdateStep('Update OpenClaw', 'running');
       const updateResult = await execOpenClawUpdate();
-      addUpdateStep('更新 OpenClaw', 'success', updateResult.output || updateResult.data?.message || '更新命令执行完成。');
+      addUpdateStep('Update OpenClaw', 'success', updateResult.output || updateResult.data?.message || 'Update command completed.');
 
-      addUpdateStep('运行 doctor', 'running');
+      addUpdateStep('Run doctor', 'running');
       try {
         const doctorResult = await runDoctor();
-        addUpdateStep('运行 doctor', doctorResult.ok ? 'success' : 'warning', doctorResult.output);
+        addUpdateStep('Run doctor', doctorResult.ok ? 'success' : 'warning', doctorResult.output);
       } catch (error) {
-        addUpdateStep('运行 doctor', 'warning', error.message);
+        addUpdateStep('Run doctor', 'warning', error.message);
       }
 
-      addUpdateStep('重启 Gateway', 'running');
+      addUpdateStep('Restart Gateway', 'running');
       if (shouldRestartGateway) {
         await deps.runGatewayControl('start');
-        addUpdateStep('重启 Gateway', 'success', 'Gateway 已恢复运行。');
+        addUpdateStep('Restart Gateway', 'success', 'Gateway is running again.');
       } else {
-        addUpdateStep('重启 Gateway', 'skipped', 'Gateway 更新前未运行，保持停止状态。');
+        addUpdateStep('Restart Gateway', 'skipped', 'Gateway was not running before the update and remains stopped.');
       }
 
-      addUpdateStep('升级后复检', 'running');
+      addUpdateStep('Post-update Check', 'running');
       try {
         const diagnostics = await deps.buildDiagnostics();
         updateJob.postUpdateDiagnostics = {
@@ -182,16 +182,16 @@ function createUpdateService (deps) {
         };
         persistUpdateJob();
         const hasWarning = diagnostics.recommendations?.some((item) => item.level === 'warning' || item.level === 'critical');
-        addUpdateStep('升级后复检', hasWarning ? 'warning' : 'success', diagnostics.recommendations?.map((item) => `${item.title}: ${item.detail}`).join('\n') || '复检完成。');
+        addUpdateStep('Post-update Check', hasWarning ? 'warning' : 'success', diagnostics.recommendations?.map((item) => `${item.title}: ${item.detail}`).join('\n') || 'Post-update check completed.');
       } catch (error) {
-        addUpdateStep('升级后复检', 'warning', error.message);
+        addUpdateStep('Post-update Check', 'warning', error.message);
       }
 
-      finishUpdateJob('success', 'OpenClaw 更新流程已完成。');
+      finishUpdateJob('success', 'OpenClaw update workflow completed.');
       deps.appendAudit(req, 'update', true, { jobId: updateJob.id, restartedGateway: shouldRestartGateway });
     } catch (error) {
-      addUpdateStep('更新失败', 'error', error.message);
-      finishUpdateJob('error', 'OpenClaw 更新流程失败。', error.message);
+      addUpdateStep('Update Failed', 'error', error.message);
+      finishUpdateJob('error', 'OpenClaw update workflow failed.', error.message);
       deps.appendAudit(req, 'update', false, { jobId: updateJob.id, error: error.message });
     }
   }
@@ -208,19 +208,19 @@ function createUpdateService (deps) {
     disk.ok = disk.freeGb == null ? false : disk.freeGb >= 2;
     const updateAvailable = Boolean(deps.parseVersion(localVersion) && deps.parseVersion(latestRelease.latestVersion) && deps.isVersionGreater(latestRelease.latestVersion, localVersion));
     const probeChannels = Object.entries(diagnostics.openclawProbe?.channels || {}).map(([name, channel]) => ({
-      name: `${name} 探针`,
+      name: `${name} Probe`,
       ok: Boolean(channel?.probe?.ok || channel?.connected || channel?.running),
       detail: channel?.probe?.error || channel?.lastError || 'OK'
     }));
     const checks = [
-      { name: '版本差异', ok: updateAvailable, detail: updateAvailable ? `${localVersion} → ${latestRelease.latestVersion}` : '当前未检测到可用更新。' },
-      { name: '磁盘空间', ok: disk.ok, detail: disk.freeGb == null ? '无法读取磁盘空间。' : `可用 ${disk.freeGb} GB，已用 ${disk.usedPercent}%` },
-      { name: 'Gateway 状态', ok: true, detail: gatewayProcesses.length ? `当前运行中，升级会先停止再恢复。PID ${gatewayProcesses[0].pid}` : '当前未运行，升级后会保持停止状态。' },
-      { name: 'CLI 兼容性', ok: compatibility.ok, detail: `${compatibility.passed}/${compatibility.required} 项通过` },
-      ...(probeChannels.length ? probeChannels : [{ name: '通道探针', ok: false, detail: diagnostics.openclawProbe?.error || '未检测到通道探针结果。' }])
+      { name: 'Version Diff', ok: updateAvailable, detail: updateAvailable ? `${localVersion} → ${latestRelease.latestVersion}` : 'No available update detected.' },
+      { name: 'Disk Space', ok: disk.ok, detail: disk.freeGb == null ? 'Unable to read disk space.' : `Free ${disk.freeGb} GB, used ${disk.usedPercent}%` },
+      { name: 'Gateway State', ok: true, detail: gatewayProcesses.length ? `Currently running; update will stop and restore it. PID ${gatewayProcesses[0].pid}` : 'Currently stopped; it will remain stopped after updating.' },
+      { name: 'CLI Compatibility', ok: compatibility.ok, detail: `${compatibility.passed}/${compatibility.required} checks passed` },
+      ...(probeChannels.length ? probeChannels : [{ name: 'Channel Probe', ok: false, detail: diagnostics.openclawProbe?.error || 'No channel probe result detected.' }])
     ];
     return {
-      ok: checks.every((check) => check.ok || check.name === 'Gateway 状态'),
+      ok: checks.every((check) => check.ok || check.name === 'Gateway State'),
       localVersion,
       latestVersion: latestRelease.latestVersion,
       updateAvailable,

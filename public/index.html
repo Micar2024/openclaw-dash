@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <title>OpenClaw 管理看板</title>
+    <title>OpenClaw Dash</title>
     <link rel="stylesheet" href="/assets/app.css" />
     <script defer src="/vendor/html2canvas.min.js"></script>
   </head>
@@ -14,25 +14,25 @@
     <section id="login-screen" class="fixed inset-0 z-50 flex hidden items-center justify-center bg-zinc-950 px-6">
       <div class="w-full max-w-md rounded-lg border border-white/10 bg-white/[0.04] p-8 shadow-2xl shadow-black/40">
         <p class="text-sm font-medium uppercase tracking-[0.22em] text-emerald-300">OpenClaw Dash</p>
-        <h1 class="mt-4 text-3xl font-semibold text-white">登录管理看板</h1>
+        <h1 class="mt-4 text-3xl font-semibold text-white">Sign in to OpenClaw Dash</h1>
         <p id="login-message" class="mt-4 text-sm leading-6 text-zinc-400">
-          本机访问会自动建立安全会话，无需手动查询口令。
+          Local browser access creates a secure session automatically.
         </p>
 
         <button id="local-login-btn" type="button" class="mt-6 w-full rounded-md bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50">
-          本机一键登录
+          Local Sign In
         </button>
 
         <div class="mt-6 border-t border-white/10 pt-6">
-          <label for="token-input" class="text-xs font-medium text-zinc-500">访问口令</label>
+          <label for="token-input" class="text-xs font-medium text-zinc-500">Access Token</label>
           <div class="mt-2 flex gap-2">
-            <input id="token-input" type="password" autocomplete="current-password" class="min-w-0 flex-1 rounded-md border border-white/10 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/50" placeholder="远程访问时输入口令" />
+            <input id="token-input" type="password" autocomplete="current-password" class="min-w-0 flex-1 rounded-md border border-white/10 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/50" placeholder="Enter token for remote access" />
             <button id="token-login-btn" type="button" class="rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50">
-              登录
+              Sign In
             </button>
           </div>
           <p class="mt-3 text-xs leading-5 text-zinc-600">
-            本机使用无需输入；只有远程访问或自动登录失败时才需要口令。
+            Local use needs no token; remote access or failed auto sign-in requires one.
           </p>
         </div>
       </div>
@@ -41,10 +41,10 @@
     <div id="api-error-toast" class="fixed right-4 top-4 z-40 hidden max-w-md rounded-lg border border-rose-400/20 bg-rose-950/90 p-4 text-sm shadow-2xl shadow-black/40">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
-          <p id="api-error-title" class="font-semibold text-rose-100">请求失败</p>
+          <p id="api-error-title" class="font-semibold text-rose-100">Request Failed</p>
           <p id="api-error-detail" class="mt-1 break-words text-xs leading-5 text-rose-200/75"></p>
         </div>
-        <button type="button" onclick="hideApiError()" class="shrink-0 text-xs text-rose-200/70 transition hover:text-rose-100">关闭</button>
+        <button type="button" onclick="hideApiError()" class="shrink-0 text-xs text-rose-200/70 transition hover:text-rose-100">Close</button>
       </div>
     </div>
 
@@ -56,29 +56,29 @@
               OpenClaw Dash
             </p>
             <h1 class="text-3xl font-semibold tracking-normal text-white sm:text-5xl">
-              OpenClaw 管理看板
+              OpenClaw Dash
             </h1>
             <p class="mt-4 text-base text-zinc-400 sm:text-lg">
-              每临大事有静气
+              Calm diagnostics for OpenClaw
             </p>
           </div>
 
           <div class="flex items-center gap-3">
-            <button id="export-screenshot-btn" onclick="exportDashboardImage()" class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-3 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="导出脱敏高清长图">
-              导出长图
+            <button id="export-screenshot-btn" onclick="exportDashboardImage()" class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-3 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="Export a redacted high-resolution long screenshot">
+              Export Image
             </button>
-            <button id="export-report-btn" onclick="exportMarkdownReport()" class="rounded-md border border-sky-400/20 bg-sky-400/10 px-3 py-3 text-xs font-semibold text-sky-200 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="导出 Markdown 诊断报告">
-              导出报告
+            <button id="export-report-btn" onclick="exportMarkdownReport()" class="rounded-md border border-sky-400/20 bg-sky-400/10 px-3 py-3 text-xs font-semibold text-sky-200 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="Export a Markdown diagnostic report">
+              Export Report
             </button>
-            <button id="export-bundle-btn" onclick="exportSupportBundle()" class="rounded-md border border-violet-400/20 bg-violet-400/10 px-3 py-3 text-xs font-semibold text-violet-200 transition hover:bg-violet-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="导出脱敏求助包">
-              导出求助包
+            <button id="export-bundle-btn" onclick="exportSupportBundle()" class="rounded-md border border-violet-400/20 bg-violet-400/10 px-3 py-3 text-xs font-semibold text-violet-200 transition hover:bg-violet-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="Export a redacted support bundle">
+              Export Bundle
             </button>
             <div class="rounded-md border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
               <span class="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-400"></span>
-              状态与控制
+              Status & Control
             </div>
-            <button onclick="logout()" class="rounded-md border border-white/10 bg-white/[0.04] px-3 py-3 text-xs text-zinc-500 transition hover:text-zinc-300" title="退出登录">
-              退出
+            <button onclick="logout()" class="rounded-md border border-white/10 bg-white/[0.04] px-3 py-3 text-xs text-zinc-500 transition hover:text-zinc-300" title="Sign Out">
+              Sign Out
             </button>
           </div>
         </div>
@@ -90,7 +90,7 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-zinc-400">本地版本</p>
+                <p class="text-sm font-medium text-zinc-400">Local Version</p>
                 <h2 id="local-version" class="mt-3 min-h-10 text-2xl font-semibold text-white">
                   Loading...
                 </h2>
@@ -100,17 +100,17 @@
               </div>
             </div>
             <p id="local-message" class="mt-5 min-h-6 text-sm leading-6 text-zinc-400">
-              正在读取本机 openclaw 版本信息。
+              Reading local OpenClaw version.
             </p>
             <button id="update-btn" onclick="doUpdate()" class="mt-auto hidden w-fit rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50">
-              更新系统
+              Update System
             </button>
           </article>
 
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-zinc-400">官方最新版本</p>
+                <p class="text-sm font-medium text-zinc-400">Latest Official Version</p>
                 <h2 id="latest-version" class="mt-3 min-h-10 text-2xl font-semibold text-white">
                   Loading...
                 </h2>
@@ -120,11 +120,11 @@
               </div>
             </div>
             <p id="latest-message" class="mt-5 min-h-6 text-sm leading-6 text-zinc-400">
-              正在请求 GitHub 最新 Release。
+              Fetching the latest GitHub release.
             </p>
             <div id="version-update-bar" class="mt-auto hidden pt-4">
               <a id="version-release-link" href="#" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400">
-                查看更新 →
+                View Update →
               </a>
             </div>
           </article>
@@ -134,22 +134,22 @@
         <section id="update-progress-panel" class="mt-6 hidden rounded-lg border border-amber-400/20 bg-amber-400/[0.05] p-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p class="text-sm font-medium text-amber-200">更新进度</p>
-              <p id="update-progress-message" class="mt-2 text-sm text-zinc-400">等待更新任务。</p>
+              <p class="text-sm font-medium text-amber-200">Update Progress</p>
+              <p id="update-progress-message" class="mt-2 text-sm text-zinc-400">Waiting for an update job.</p>
             </div>
             <div class="flex items-center gap-3 self-start sm:self-center">
               <span id="update-status-pill" class="rounded-md border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-400">
                 Idle
               </span>
               <button id="update-details-toggle" type="button" onclick="toggleUpdateDetails()" class="hidden rounded-md bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.12]">
-                展开详情
+                Show Details
               </button>
             </div>
           </div>
           <div id="update-progress-details" class="mt-4">
             <div id="update-progress-list" class="space-y-2"></div>
             <button id="post-update-probe-btn" type="button" onclick="runDiagnosticsProbe()" class="mt-4 hidden rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50">
-              升级后复检
+              Post-update Check
             </button>
           </div>
         </section>
@@ -159,25 +159,25 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-zinc-400">今日健康摘要</p>
+                <p class="text-sm font-medium text-zinc-400">Today's Health Summary</p>
                 <h2 id="health-score" class="mt-3 text-5xl font-semibold text-white">--</h2>
-                <p id="health-summary" class="mt-3 text-sm leading-6 text-zinc-500">正在汇总 Gateway、通道、版本、磁盘和错误日志。</p>
+                <p id="health-summary" class="mt-3 text-sm leading-6 text-zinc-500">Summarizing Gateway, channels, versions, disk, and recent errors.</p>
               </div>
               <span id="health-level" class="rounded-md border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-500">Loading</span>
             </div>
             <div id="health-checks" class="mt-5 space-y-2 text-xs text-zinc-500"></div>
-            <p id="health-updated" class="mt-4 text-xs text-zinc-600">等待刷新</p>
+            <p id="health-updated" class="mt-4 text-xs text-zinc-600">Waiting for refresh</p>
           </article>
 
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p class="text-sm font-medium text-zinc-400">首次启动向导</p>
-                <h2 id="setup-summary" class="mt-3 text-2xl font-semibold text-white">正在检查环境</h2>
-                <p id="setup-updated" class="mt-3 text-sm leading-6 text-zinc-500">检查 OpenClaw、Gateway、日志路径、配置权限与访问模式。</p>
+                <p class="text-sm font-medium text-zinc-400">First-run Wizard</p>
+                <h2 id="setup-summary" class="mt-3 text-2xl font-semibold text-white">Checking Environment</h2>
+                <p id="setup-updated" class="mt-3 text-sm leading-6 text-zinc-500">Checking OpenClaw, Gateway, log paths, config permissions, and access mode.</p>
               </div>
               <button type="button" onclick="loadSetupStatus()" class="self-start rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12]">
-                重新检查
+                Recheck
               </button>
             </div>
             <div id="setup-list" class="mt-5 grid gap-2 text-xs text-zinc-500 sm:grid-cols-2"></div>
@@ -188,41 +188,41 @@
         <section class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p class="text-sm font-medium text-zinc-400">系统保障中心</p>
-              <h2 id="assurance-summary" class="mt-3 text-2xl font-semibold text-white">等待体检</h2>
-              <p id="assurance-updated" class="mt-3 text-sm text-zinc-500">兼容性、升级预检、版本源、日志降噪与配置只读体检。</p>
+              <p class="text-sm font-medium text-zinc-400">Assurance Center</p>
+              <h2 id="assurance-summary" class="mt-3 text-2xl font-semibold text-white">Waiting for Check</h2>
+              <p id="assurance-updated" class="mt-3 text-sm text-zinc-500">Compatibility, update preflight, version sources, log muting, and read-only config health.</p>
             </div>
             <button type="button" onclick="loadAssurance()" class="self-start rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12]">
-              刷新体检
+              Refresh Checks
             </button>
           </div>
           <div class="mt-5 grid gap-4 lg:grid-cols-2">
             <article class="rounded-md border border-white/10 bg-zinc-950/35 p-4">
               <div class="flex items-center justify-between gap-3">
-                <p class="text-sm font-semibold text-zinc-200">兼容性自检</p>
+                <p class="text-sm font-semibold text-zinc-200">Compatibility Check</p>
                 <span id="compatibility-pill" class="rounded-md border border-white/10 px-2 py-1 text-xs text-zinc-500">-</span>
               </div>
               <div id="compatibility-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
             </article>
             <article class="rounded-md border border-white/10 bg-zinc-950/35 p-4">
               <div class="flex items-center justify-between gap-3">
-                <p class="text-sm font-semibold text-zinc-200">升级前预检</p>
+                <p class="text-sm font-semibold text-zinc-200">Update Preflight</p>
                 <span id="preflight-pill" class="rounded-md border border-white/10 px-2 py-1 text-xs text-zinc-500">-</span>
               </div>
               <div id="preflight-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
             </article>
             <article class="rounded-md border border-white/10 bg-zinc-950/35 p-4">
-              <p class="text-sm font-semibold text-zinc-200">版本源健康</p>
+              <p class="text-sm font-semibold text-zinc-200">Version Source Health</p>
               <div id="version-sources-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
             </article>
             <article class="rounded-md border border-white/10 bg-zinc-950/35 p-4">
-              <p class="text-sm font-semibold text-zinc-200">配置只读体检</p>
+              <p class="text-sm font-semibold text-zinc-200">Read-only Config Health</p>
               <div id="config-health-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
             </article>
           </div>
           <article class="mt-4 rounded-md border border-white/10 bg-zinc-950/35 p-4">
             <div class="flex items-center justify-between gap-3">
-              <p class="text-sm font-semibold text-zinc-200">日志降噪规则</p>
+              <p class="text-sm font-semibold text-zinc-200">Log Muting Rules</p>
               <span id="log-rules-pill" class="text-xs text-zinc-500">-</span>
             </div>
             <div id="log-rules-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
@@ -234,12 +234,12 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p class="text-sm font-medium text-zinc-400">官方 Control UI 配合</p>
-                <h2 id="official-dashboard-summary" class="mt-3 text-2xl font-semibold text-white">正在检测</h2>
-                <p id="official-dashboard-detail" class="mt-3 text-sm leading-6 text-zinc-500">检测 Gateway 自带官方 Dashboard 是否可达，不读取或保存官方 token。</p>
+                <p class="text-sm font-medium text-zinc-400">Official Control UI Companion</p>
+                <h2 id="official-dashboard-summary" class="mt-3 text-2xl font-semibold text-white">Checking</h2>
+                <p id="official-dashboard-detail" class="mt-3 text-sm leading-6 text-zinc-500">Checks whether the official Gateway Dashboard is reachable without reading or storing official tokens.</p>
               </div>
               <a id="official-dashboard-link" href="http://127.0.0.1:18789/" target="_blank" rel="noopener" class="self-start rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400">
-                打开官方 Dashboard
+                Open Official Dashboard
               </a>
             </div>
             <div id="official-dashboard-facts" class="mt-5 grid gap-3 text-xs sm:grid-cols-3"></div>
@@ -248,11 +248,11 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-zinc-400">排障路径建议</p>
-                <h2 id="troubleshooting-summary" class="mt-3 text-2xl font-semibold text-white">等待分析</h2>
+                <p class="text-sm font-medium text-zinc-400">Troubleshooting Path</p>
+                <h2 id="troubleshooting-summary" class="mt-3 text-2xl font-semibold text-white">Waiting for Analysis</h2>
               </div>
               <button type="button" onclick="loadTroubleshooting()" class="rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12]">
-                刷新建议
+                Refresh Suggestions
               </button>
             </div>
             <div id="troubleshooting-list" class="mt-5 space-y-2 text-xs text-zinc-500"></div>
@@ -263,9 +263,9 @@
         <section class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p class="text-sm font-medium text-zinc-400">当前运行大模型</p>
+              <p class="text-sm font-medium text-zinc-400">Current Runtime Model</p>
               <h2 id="model-current" class="mt-3 text-2xl font-semibold text-white">Loading...</h2>
-              <p id="model-source" class="mt-3 text-sm text-zinc-500">正在读取 OpenClaw 模型配置。</p>
+              <p id="model-source" class="mt-3 text-sm text-zinc-500">Reading OpenClaw model configuration.</p>
             </div>
             <div class="grid gap-3 text-sm text-zinc-400 sm:grid-cols-2 lg:min-w-[440px]">
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
@@ -293,9 +293,9 @@
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
             <div>
-              <h2 class="text-xl font-semibold text-white">通道状态监测</h2>
+              <h2 class="text-xl font-semibold text-white">Channel Status Monitoring</h2>
             </div>
-            <p id="channels-updated-at" class="text-sm text-zinc-500">等待刷新</p>
+            <p id="channels-updated-at" class="text-sm text-zinc-500">Waiting for refresh</p>
           </div>
 
           <div id="channels-grid" class="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-3"></div>
@@ -305,24 +305,24 @@
         <section class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p class="text-sm font-medium text-zinc-400">健康诊断</p>
-              <h2 id="diagnostics-summary" class="mt-3 text-2xl font-semibold text-white">等待自检</h2>
-              <p id="diagnostics-updated" class="mt-3 text-sm text-zinc-500">用于区分配置、API、Gateway 运行态和通道探针问题。</p>
+              <p class="text-sm font-medium text-zinc-400">Health Diagnostics</p>
+              <h2 id="diagnostics-summary" class="mt-3 text-2xl font-semibold text-white">Waiting for Diagnostics</h2>
+              <p id="diagnostics-updated" class="mt-3 text-sm text-zinc-500">Helps distinguish config, API, Gateway runtime, and channel probe issues.</p>
             </div>
             <button id="diagnostics-probe-btn" type="button" onclick="runDiagnosticsProbe()" class="self-start rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50">
-              立即自检
+              Run Diagnostics
             </button>
           </div>
           <div id="diagnostics-cards" class="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4"></div>
           <div id="diagnostics-recommendations" class="mt-5 space-y-2"></div>
           <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-white/10 pt-5">
             <button type="button" onclick="verifyChannel('feishu')" class="channel-verify-button rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50" data-channel="feishu">
-              飞书真实验证
+              Feishu Verification
             </button>
             <button type="button" onclick="verifyChannel('telegram')" class="channel-verify-button rounded-md bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50" data-channel="telegram">
-              Telegram 真实验证
+              Telegram Verification
             </button>
-            <p id="channel-verify-message" class="flex min-h-9 flex-1 items-center text-sm leading-6 text-zinc-500">真实验证会向对应通道发送一条测试消息。</p>
+            <p id="channel-verify-message" class="flex min-h-9 flex-1 items-center text-sm leading-6 text-zinc-500">Real verification sends a test message to the selected channel.</p>
           </div>
         </section>
 
@@ -330,13 +330,13 @@
         <section class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="flex items-center justify-between gap-4">
             <div>
-              <p class="text-sm font-medium text-zinc-400">故障时间线</p>
-              <h2 class="mt-3 text-xl font-semibold text-white">最近事件</h2>
+              <p class="text-sm font-medium text-zinc-400">Fault Timeline</p>
+              <h2 class="mt-3 text-xl font-semibold text-white">Recent Events</h2>
             </div>
-            <button type="button" onclick="loadTimeline()" class="rounded-md bg-white/[0.08] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.12]">刷新</button>
+            <button type="button" onclick="loadTimeline()" class="rounded-md bg-white/[0.08] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.12]">Refresh</button>
           </div>
           <div id="timeline-list" class="mt-5 space-y-3">
-            <p class="text-sm text-zinc-500">等待事件数据。</p>
+            <p class="text-sm text-zinc-500">Waiting for event data.</p>
           </div>
           <p id="timeline-updated" class="mt-4 text-xs text-zinc-600">-</p>
         </section>
@@ -345,7 +345,7 @@
         <section id="gateway-control-panel" class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="gateway-control-layout flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div class="flex-1">
-              <p class="text-sm font-medium text-zinc-400">Gateway 运行控制</p>
+              <p class="text-sm font-medium text-zinc-400">Gateway Control</p>
               <div class="mt-3 flex items-center gap-3">
                 <span id="gateway-dot" class="h-3 w-3 rounded-full bg-zinc-600"></span>
                 <h2 id="gateway-status" class="text-2xl font-semibold text-white">Loading...</h2>
@@ -353,12 +353,12 @@
               <div id="gateway-metrics" class="mt-3 hidden">
                 <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-zinc-500">
                   <span>PID: <span id="gw-pid" class="text-zinc-300">-</span></span>
-                  <span>运行时长: <span id="gw-uptime" class="text-zinc-300">-</span></span>
-                  <span>内存: <span id="gw-memory" class="text-zinc-300">-</span></span>
+                  <span>Uptime: <span id="gw-uptime" class="text-zinc-300">-</span></span>
+                  <span>Memory: <span id="gw-memory" class="text-zinc-300">-</span></span>
                 </div>
               </div>
               <p id="control-message" class="mt-4 min-h-6 text-sm leading-6 text-zinc-400">
-                正在检查 OpenClaw Gateway 进程。
+                Checking the OpenClaw Gateway process.
               </p>
             </div>
 
@@ -368,21 +368,21 @@
                 data-action="start"
                 class="control-button rounded-md bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                启动
+                Start
               </button>
               <button
                 type="button"
                 data-action="restart"
                 class="control-button rounded-md bg-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                重启
+                Restart
               </button>
               <button
                 type="button"
                 data-action="stop"
                 class="control-button rounded-md bg-rose-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                停止
+                Stop
               </button>
             </div>
           </div>
@@ -391,14 +391,14 @@
         <!-- Error Log -->
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold text-white">最近错误日志</h2>
+            <h2 class="text-xl font-semibold text-white">Recent Error Logs</h2>
             <div class="flex gap-3">
-              <button onclick="copyErrors()" class="text-xs text-zinc-500 transition hover:text-zinc-300">复制</button>
-              <button onclick="loadErrors()" class="text-xs text-zinc-500 transition hover:text-zinc-300">刷新</button>
+              <button onclick="copyErrors()" class="text-xs text-zinc-500 transition hover:text-zinc-300">Copy</button>
+              <button onclick="loadErrors()" class="text-xs text-zinc-500 transition hover:text-zinc-300">Refresh</button>
             </div>
           </div>
           <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
-            <div id="errors-empty" class="hidden text-sm text-zinc-500">最近无错误记录 ✅</div>
+            <div id="errors-empty" class="hidden text-sm text-zinc-500">No recent errors.</div>
             <div id="errors-list" class="space-y-2"></div>
             <p id="errors-updated" class="mt-4 text-xs text-zinc-600">-</p>
           </article>
@@ -407,12 +407,12 @@
         <!-- Audit Log -->
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold text-white">操作审计</h2>
-            <button onclick="loadAudit()" class="text-xs text-zinc-500 transition hover:text-zinc-300">刷新</button>
+            <h2 class="text-xl font-semibold text-white">Operation Audit</h2>
+            <button onclick="loadAudit()" class="text-xs text-zinc-500 transition hover:text-zinc-300">Refresh</button>
           </div>
           <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div id="audit-list" class="space-y-2 text-xs text-zinc-400">
-              <p class="text-zinc-500">等待操作记录。</p>
+              <p class="text-zinc-500">Waiting for operation records.</p>
             </div>
             <p id="audit-updated" class="mt-4 text-xs text-zinc-600">-</p>
           </article>
@@ -421,17 +421,17 @@
         <!-- Disk Space -->
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold text-white">磁盘空间</h2>
+            <h2 class="text-xl font-semibold text-white">Disk Space</h2>
             <span id="disk-updated-at" class="text-sm text-zinc-500">-</span>
           </div>
           <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm font-medium text-zinc-400">可用空间</p>
+                <p class="text-sm font-medium text-zinc-400">Free Space</p>
                 <p id="disk-free" class="mt-2 text-2xl font-semibold text-white">Loading...</p>
               </div>
               <div class="text-right">
-                <p class="text-sm font-medium text-zinc-400">已用</p>
+                <p class="text-sm font-medium text-zinc-400">Used</p>
                 <p id="disk-percent" class="mt-2 text-2xl font-semibold text-white">-</p>
               </div>
             </div>
@@ -444,17 +444,17 @@
         <!-- Memory -->
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold text-white">运行内存</h2>
+            <h2 class="text-xl font-semibold text-white">Memory</h2>
             <span id="memory-updated-at" class="text-sm text-zinc-500">-</span>
           </div>
           <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p class="text-sm font-medium text-zinc-400">可用内存</p>
+                <p class="text-sm font-medium text-zinc-400">Free Memory</p>
                 <p id="memory-free" class="mt-2 text-2xl font-semibold text-white">Loading...</p>
               </div>
               <div class="lg:text-right">
-                <p class="text-sm font-medium text-zinc-400">已用</p>
+                <p class="text-sm font-medium text-zinc-400">Used</p>
                 <p id="memory-percent" class="mt-2 text-2xl font-semibold text-white">-</p>
               </div>
             </div>
@@ -463,37 +463,37 @@
             </div>
             <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">总内存</p>
+                <p class="text-xs text-zinc-500">Total Memory</p>
                 <p id="memory-total" class="mt-1 text-sm font-semibold text-zinc-200">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">活跃应用</p>
+                <p class="text-xs text-zinc-500">Active Apps</p>
                 <p id="memory-used" class="mt-1 text-sm font-semibold text-amber-400">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">可回收缓存</p>
+                <p class="text-xs text-zinc-500">Reclaimable Cache</p>
                 <p id="memory-reclaimable" class="mt-1 text-sm font-semibold text-sky-400">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">空闲</p>
+                <p class="text-xs text-zinc-500">Free</p>
                 <p id="memory-free2" class="mt-1 text-sm font-semibold text-emerald-400">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">系统占用</p>
+                <p class="text-xs text-zinc-500">System Wired</p>
                 <p id="memory-wired" class="mt-1 text-sm font-semibold text-zinc-300">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">压缩内存</p>
+                <p class="text-xs text-zinc-500">Compressed Memory</p>
                 <p id="memory-compressed" class="mt-1 text-sm font-semibold text-zinc-300">-</p>
               </div>
             </div>
 
             <details class="mt-5 cursor-pointer">
-              <summary class="select-none text-xs text-zinc-500 hover:text-zinc-400">占用明细</summary>
+              <summary class="select-none text-xs text-zinc-500 hover:text-zinc-400">Process Details</summary>
               <div id="memory-processes" class="mt-4 rounded-md border border-white/10 bg-zinc-950/35 p-3">
                 <div class="mb-3 grid grid-cols-[minmax(0,1fr)_220px] items-center gap-4 px-2 text-xs text-zinc-500">
-                  <span>进程</span>
-                  <span class="text-right">用户 / 内存</span>
+                  <span>Process</span>
+                  <span class="text-right">User / Memory</span>
                 </div>
                 <div id="memory-processes-list" class="space-y-2 text-xs text-zinc-400"></div>
               </div>

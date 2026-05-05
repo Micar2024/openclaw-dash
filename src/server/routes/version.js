@@ -3,7 +3,7 @@ function registerVersionRoutes (app, deps) {
     try {
       res.json(await deps.getLocalVersionStatus());
     } catch (error) {
-      res.status(500).json({ installed: false, version: null, message: '本地版本检查失败。', detail: error.message });
+      res.status(500).json({ installed: false, version: null, message: 'Local version check failed.', detail: error.message });
     }
   });
 
@@ -11,7 +11,7 @@ function registerVersionRoutes (app, deps) {
     try {
       const latestRelease = await deps.getLatestReleaseInfo();
       if (!latestRelease.latestVersion) {
-        return res.status(502).json({ success: false, latestVersion: null, message: '无法获取最新版本信息，请稍后重试。' });
+        return res.status(502).json({ success: false, latestVersion: null, message: 'Unable to fetch latest version information. Please retry later.' });
       }
       res.json({
         success: true,
@@ -25,7 +25,7 @@ function registerVersionRoutes (app, deps) {
       res.status(502).json({
         success: false,
         latestVersion: null,
-        message: '无法获取 GitHub 最新 Release 信息，请稍后重试。',
+        message: 'Unable to fetch the latest GitHub release. Please retry later.',
         detail: error.response?.data?.message || error.message
       });
     }

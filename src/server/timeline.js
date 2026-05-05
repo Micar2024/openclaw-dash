@@ -13,8 +13,8 @@ async function buildTimeline (deps) {
     timestamp: now,
     type: gatewayRunning ? 'gateway.ok' : 'gateway.offline',
     level: gatewayRunning ? 'ok' : 'critical',
-    title: gatewayRunning ? 'Gateway 正在运行' : 'Gateway 未运行',
-    detail: gatewayRunning ? '当前进程检测正常。' : '未检测到 Gateway 进程。',
+    title: gatewayRunning ? 'Gateway Running' : 'Gateway Stopped',
+    detail: gatewayRunning ? 'Current process check is healthy.' : 'Gateway process was not detected.',
     source: 'runtime'
   });
 
@@ -26,8 +26,8 @@ async function buildTimeline (deps) {
       timestamp: detail.lastSeenAt || now,
       type: `channel.${detail.id}.${detail.status || 'unknown'}`,
       level: detail.status === 'online' ? 'ok' : 'warning',
-      title: `${detail.label || detail.id}通道 ${detail.status === 'online' ? '在线' : '离线'}`,
-      detail: detail.reason || detail.lastError || '无更多细节。',
+      title: `${detail.label || detail.id} Channel ${detail.status === 'online' ? 'Online' : 'Offline'}`,
+      detail: detail.reason || detail.lastError || 'No more detail.',
       source: 'channel'
     });
   }
@@ -37,8 +37,8 @@ async function buildTimeline (deps) {
       timestamp: entry.timestamp,
       type: entry.action,
       level: entry.success ? 'info' : 'warning',
-      title: `操作：${entry.action}`,
-      detail: `${entry.success ? '成功' : '失败'} · ${String(entry.ip || 'unknown').replace(/^::ffff:/, '')}`,
+      title: `Operation: ${entry.action}`,
+      detail: `${entry.success ? 'success' : 'failed'} · ${String(entry.ip || 'unknown').replace(/^::ffff:/, '')}`,
       source: 'audit'
     });
   }
@@ -48,7 +48,7 @@ async function buildTimeline (deps) {
       timestamp: error.timestamp || now,
       type: 'log.error',
       level: 'warning',
-      title: `错误日志：${error.source}`,
+      title: `Error log: ${error.source}`,
       detail: error.message,
       source: 'logs'
     });
@@ -59,7 +59,7 @@ async function buildTimeline (deps) {
       timestamp: step.timestamp,
       type: `update.${step.status}`,
       level: step.status === 'error' ? 'critical' : step.status === 'warning' ? 'warning' : 'info',
-      title: `更新步骤：${step.name}`,
+      title: `Update step: ${step.name}`,
       detail: step.detail || step.status,
       source: 'update'
     });

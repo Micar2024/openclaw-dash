@@ -40,8 +40,8 @@ const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_LOG_MUTE_RULES = [
   {
     id: 'feishu-open-id-resolved-unknown',
-    label: '飞书 bot open_id resolved: unknown',
-    description: '飞书插件解析发送者时的已知无害日志，不计入错误统计。',
+    label: 'Feishu bot open_id resolved: unknown',
+    description: 'Known harmless log emitted when the Feishu plugin resolves senders; excluded from error statistics.',
     pattern: 'bot open_id resolved:\\s*unknown|resolved:\\s*unknown',
     enabled: true
   }

@@ -12,14 +12,14 @@ function createChannelService (deps) {
   const realVerifyState = {};
   const REAL_VERIFY_TTL_MS = 10 * 60 * 1000;
   const channelLabels = {
-    feishu: '飞书',
-    lark: '飞书',
+    feishu: 'Feishu',
+    lark: 'Lark',
     telegram: 'Telegram',
     email: 'Email',
     slack: 'Slack',
     discord: 'Discord',
-    wechat: '微信',
-    wecom: '企业微信'
+    wechat: 'WeChat',
+    wecom: 'WeCom'
   };
 
   function extractTimestamp (line) {
@@ -43,7 +43,7 @@ function createChannelService (deps) {
   }
 
   function getChannelKeywords (channel) {
-    if (channel === 'feishu') return ['feishu', 'lark', '飞书'];
+    if (channel === 'feishu') return ['feishu', 'lark', '\u98de\u4e66'];
     if (channel === 'telegram') return ['telegram', 'tg'];
     return [channel, channelLabels[channel]].filter(Boolean).map((item) => String(item).toLowerCase());
   }
@@ -63,11 +63,11 @@ function createChannelService (deps) {
 
   function verificationMeta (source, channel, detail) {
     const labels = {
-      direct: '真实收发验证',
-      probe: 'OpenClaw CLI 探针',
-      log: '日志推断',
-      config: '配置状态',
-      none: '无正向信号'
+      direct: 'Direct verification',
+      probe: 'OpenClaw CLI probe',
+      log: 'Log inference',
+      config: 'Config state',
+      none: 'No positive signal'
     };
     const confidence = {
       direct: 'high',
@@ -80,7 +80,7 @@ function createChannelService (deps) {
       source,
       label: labels[source] || source,
       confidence: confidence[source] || 'low',
-      detail: detail || `${getChannelLabel(channel)} 使用${labels[source] || source}判断。`
+      detail: detail || `${getChannelLabel(channel)} uses ${labels[source] || source} for status.`
     };
   }
 
@@ -130,13 +130,13 @@ function createChannelService (deps) {
 
   function explainChannelStatus (channel, status, lastSignalLine, lastErrorLine) {
     if (lastErrorLine && status === 'offline') {
-      if (/status code 400/i.test(lastErrorLine)) return '最近检测到连接请求返回 400，通道可能未完成升级后的配置适配。';
-      if (/connect failed|unable to connect/i.test(lastErrorLine)) return '最近检测到连接失败。';
-      return '最近错误日志晚于连接日志。';
+      if (/status code 400/i.test(lastErrorLine)) return 'A recent connection request returned 400; the channel may need post-upgrade config adaptation.';
+      if (/connect failed|unable to connect/i.test(lastErrorLine)) return 'A recent connection failure was detected.';
+      return 'The latest error log is newer than the latest healthy signal.';
     }
 
-    if (lastSignalLine && status === 'online') return '最近健康信号晚于错误信号。';
-    return '未检测到可证明通道在线的近期健康信号。';
+    if (lastSignalLine && status === 'online') return 'The latest healthy signal is newer than the latest error signal.';
+    return 'No recent healthy signal proves this channel is online.';
   }
 
   function maxProbeTimestamp (...values) {
@@ -176,7 +176,7 @@ function createChannelService (deps) {
 
     const label = getChannelLabel(channel);
     const onlineReason = probeOk ? 'probe.ok' : connected ? 'connected' : 'running';
-    const verificationDetail = status === 'online' ? `OpenClaw CLI 返回 ${onlineReason}。` : 'OpenClaw CLI 未确认通道在线。';
+    const verificationDetail = status === 'online' ? `OpenClaw CLI returned ${onlineReason}.` : 'OpenClaw CLI did not confirm the channel is online.';
 
     return {
       id: channel,
@@ -189,8 +189,8 @@ function createChannelService (deps) {
       lastError,
       verification: verificationMeta('probe', channel, verificationDetail),
       reason: status === 'online'
-        ? `OpenClaw CLI 探针确认 ${label} ${onlineReason}。`
-        : (configured ? (lastError || 'OpenClaw CLI 探针未确认通道在线。') : 'OpenClaw CLI 显示通道未配置。')
+        ? `OpenClaw CLI probe confirmed ${label} ${onlineReason}.`
+        : (configured ? (lastError || 'OpenClaw CLI probe did not confirm the channel is online.') : 'OpenClaw CLI reports the channel is not configured.')
     };
   }
 
@@ -230,11 +230,11 @@ function createChannelService (deps) {
         'direct',
         channel,
         verified.received
-          ? '最近真实验证已发送测试消息，并确认 Gateway 近期活动。'
-          : '最近真实验证已发送测试消息，但 Gateway 近期活动仍未确认。'
+          ? 'Recent direct verification sent a test message and confirmed Gateway activity.'
+          : 'Recent direct verification sent a test message, but Gateway activity remains unconfirmed.'
       ),
       reason: verified.received
-        ? '真实验证确认测试消息发送成功，且 Gateway 近期活动正常。'
+        ? 'Direct verification confirmed the test message was sent and Gateway activity looks healthy.'
         : health.reason
     };
   }
@@ -251,8 +251,8 @@ function createChannelService (deps) {
         lastSignalAt: null,
         lastErrorAt: null,
         lastError: null,
-        verification: verificationMeta('config', channel, '配置中该通道未启用。'),
-        reason: '配置中该通道未启用。'
+        verification: verificationMeta('config', channel, 'This channel is disabled in config.'),
+        reason: 'This channel is disabled in config.'
       };
     }
 
@@ -294,7 +294,7 @@ function createChannelService (deps) {
       lastSignalAt,
       lastErrorAt,
       lastError: lastErrorLine ? lastErrorLine.slice(0, 500) : null,
-      verification: verificationMeta(lastSignalLine ? 'log' : 'none', channel, lastSignalLine ? '从 Gateway 日志中发现最近健康信号。' : '未发现可证明在线的日志或探针信号。'),
+      verification: verificationMeta(lastSignalLine ? 'log' : 'none', channel, lastSignalLine ? 'Recent healthy signal found in Gateway logs.' : 'No log or probe signal proves this channel is online.'),
       reason: explainChannelStatus(channel, status, lastSignalLine, lastErrorLine)
     };
     return applyRealVerification(channel, mergeChannelHealth(logHealth, deriveChannelHealthFromProbe(channel, probe)));
@@ -361,17 +361,17 @@ function createChannelService (deps) {
     const receiveId = config.channels?.feishu?.allowFrom?.[0] || null;
     const baseUrl = creds.domain === 'larksuite' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
 
-    if (!receiveId) throw new Error('飞书 allowFrom 为空，无法确定测试消息接收人。');
-    if (!creds.appId || !creds.appSecret) throw new Error('飞书 App ID 或 App Secret 未读取到。');
+    if (!receiveId) throw new Error('Feishu allowFrom is empty, so the test-message recipient cannot be determined.');
+    if (!creds.appId || !creds.appSecret) throw new Error('Feishu App ID or App Secret could not be read.');
 
     const tokenResponse = await axios.post(`${baseUrl}/open-apis/auth/v3/tenant_access_token/internal`, {
       app_id: creds.appId,
       app_secret: creds.appSecret
     }, { timeout: 8000 });
     const tenantToken = tokenResponse.data?.tenant_access_token;
-    if (tokenResponse.data?.code !== 0 || !tenantToken) throw new Error(tokenResponse.data?.msg || 'tenant_access_token 获取失败。');
+    if (tokenResponse.data?.code !== 0 || !tenantToken) throw new Error(tokenResponse.data?.msg || 'tenant_access_token fetch failed.');
 
-    const text = `OpenClaw Dash 通道验证 ${new Date().toLocaleString('zh-CN', { hour12: false })}`;
+    const text = `OpenClaw Dash channel verification ${new Date().toLocaleString('en-US', { hour12: false })}`;
     const response = await axios.post(`${baseUrl}/open-apis/im/v1/messages`, {
       receive_id: receiveId,
       msg_type: 'text',
@@ -382,7 +382,7 @@ function createChannelService (deps) {
       timeout: 10000
     });
 
-    if (response.data?.code !== 0) throw new Error(response.data?.msg || '飞书测试消息发送失败。');
+    if (response.data?.code !== 0) throw new Error(response.data?.msg || 'Feishu test message failed to send.');
     const health = await getChannelHealth('feishu', await deps.getCachedOpenClawChannelProbe(true));
     return {
       channel: 'feishu',
@@ -391,22 +391,22 @@ function createChannelService (deps) {
       messageId: response.data?.data?.message_id || null,
       target: receiveId,
       lastInboundAt: health.lastSeenAt,
-      note: '已通过飞书官方 API 发送测试消息；接收侧以 Gateway 最近活动日志作为参考。'
+      note: 'Test message sent through the official Feishu API; receiving side uses recent Gateway activity as reference.'
     };
   }
 
   async function verifyTelegramChannel () {
     const creds = getTelegramCredentials();
-    if (!creds.enabled) throw new Error('Telegram 通道未启用。');
-    if (!creds.botToken || !creds.chatId) throw new Error('Telegram botToken 或 allowFrom 未配置。');
+    if (!creds.enabled) throw new Error('Telegram channel is disabled.');
+    if (!creds.botToken || !creds.chatId) throw new Error('Telegram botToken or allowFrom is not configured.');
 
-    const text = `OpenClaw Dash 通道验证 ${new Date().toLocaleString('zh-CN', { hour12: false })}`;
+    const text = `OpenClaw Dash channel verification ${new Date().toLocaleString('en-US', { hour12: false })}`;
     const response = await axios.post(`https://api.telegram.org/bot${creds.botToken}/sendMessage`, {
       chat_id: creds.chatId,
       text
     }, { timeout: 10000 });
 
-    if (!response.data?.ok) throw new Error(response.data?.description || 'Telegram 测试消息发送失败。');
+    if (!response.data?.ok) throw new Error(response.data?.description || 'Telegram test message failed to send.');
     const health = await getChannelHealth('telegram', await deps.getCachedOpenClawChannelProbe(true));
     return {
       channel: 'telegram',
@@ -415,7 +415,7 @@ function createChannelService (deps) {
       messageId: response.data?.result?.message_id || null,
       target: creds.chatId,
       lastInboundAt: health.lastSeenAt,
-      note: '已通过 Telegram Bot API 发送测试消息；接收侧以 Gateway 最近活动日志作为参考。'
+      note: 'Test message sent through Telegram Bot API; receiving side uses recent Gateway activity as reference.'
     };
   }
 
@@ -423,7 +423,7 @@ function createChannelService (deps) {
     let result;
     if (channel === 'feishu') result = await verifyFeishuChannel();
     else if (channel === 'telegram') result = await verifyTelegramChannel();
-    else throw new Error('仅支持 feishu 或 telegram。');
+    else throw new Error('Only feishu or telegram is supported.');
     realVerifyState[channel] = {
       sent: Boolean(result.sent),
       received: Boolean(result.received),
@@ -455,7 +455,7 @@ function createChannelService (deps) {
       for (const channel of (channels.items || []).map((item) => item.id)) {
         const health = channels.detail?.[channel] || {};
         const state = channelAlertState[channel] || (channelAlertState[channel] = { initialized: false, offlineSince: null, alerted: false });
-        const label = `${health.label || getChannelLabel(channel)}通道`;
+        const label = `${health.label || getChannelLabel(channel)} Channel`;
 
         if (health.status === 'online') {
           state.initialized = true;
@@ -475,11 +475,11 @@ function createChannelService (deps) {
         const offlineMs = now - state.offlineSince;
         if (!state.alerted && offlineMs >= CHANNEL_ALERT_AFTER_MS) {
           state.alerted = true;
-          await deps.sendMacOSAlert(`${label} 已连续离线超过 5 分钟，请前往管理面板检查。${health.reason ? `\n${health.reason}` : ''}`, 'OpenClaw 通道告警');
+          await deps.sendMacOSAlert(`${label} has been offline for more than 5 minutes. Please check the dashboard.${health.reason ? `\n${health.reason}` : ''}`, 'OpenClaw Channel Alert');
         }
       }
     } catch (error) {
-      console.error('[ChannelWatchdog] 状态检查失败:', error.message);
+      console.error('[ChannelWatchdog] Status check failed:', error.message);
     }
   }
 

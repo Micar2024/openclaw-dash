@@ -64,8 +64,8 @@ function createOfficialDashboardService () {
           configured: authConfigured
         },
         recommendation: reachable
-          ? (authConfigured ? '官方 Control UI 可达；如仍无法进入，优先检查浏览器内的 Gateway token/password。' : '官方 Control UI 可达，但未检测到显式 auth 配置；如遇 1008/unauthorized，运行 openclaw doctor --generate-gateway-token。')
-          : '官方 Control UI 未响应；如果 Gateway 正在运行，检查端口、basePath 或官方 Dashboard 鉴权配置。',
+          ? (authConfigured ? 'Official Control UI is reachable. If you still cannot enter, first check the Gateway token/password in the browser.' : 'Official Control UI is reachable, but no explicit auth config was found. If you see 1008/unauthorized, run `openclaw doctor --generate-gateway-token`.')
+          : 'Official Control UI is not responding. If Gateway is running, check port, basePath, or official Dashboard auth config.',
         collectedAt: new Date().toISOString()
       };
     } catch (error) {
@@ -82,7 +82,7 @@ function createOfficialDashboardService () {
           configured: Boolean(config.auth.tokenPresent || config.auth.passwordPresent || config.auth.allowTailscale || config.auth.trustedProxy || config.auth.mode === 'none')
         },
         error: error.code || error.message,
-        recommendation: '官方 Control UI 未响应；先确认 Gateway 进程是否运行，再检查 18789 端口或自定义 OPENCLAW_GATEWAY_PORT。',
+        recommendation: 'Official Control UI is not responding. First confirm Gateway is running, then check port 18789 or custom OPENCLAW_GATEWAY_PORT.',
         collectedAt: new Date().toISOString()
       };
     }

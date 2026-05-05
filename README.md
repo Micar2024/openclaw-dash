@@ -1,15 +1,15 @@
-# OpenClaw Dash — 社区诊断工具箱
+# OpenClaw Dash — Community Diagnostic Toolkit
 
 A lightweight local diagnostic toolkit for the OpenClaw community. Open the dashboard, export a privacy-masked report, paste it in Discord or your support group, and others can see the facts immediately.
 
 ![OpenClaw Dash overview](docs/images/dashboard-overview.svg)
 
-## 使用场景
+## Use Cases
 
-- **「我的 OpenClaw 出问题了，帮我看一下」** — 打开看板，一键导出脱敏诊断报告或求助包，贴到社区求助，不用描述版本/配置/报错
-- **升级前先体检** — 运行更新预检，确认磁盘空间、CLI 兼容性、通道在线状态，防止升级翻车
-- **日常健康巡检** — 看一眼健康评分，确认 Gateway 运行时长、飞书/Telegram 是否在线、有没有积压错误
-- **自检配置** — 只读查看通道启用状态、allowlist、blockStreaming 等配置健康度
+- **“My OpenClaw is broken, can someone help?”** — open the dashboard, export a redacted diagnostic report or support bundle, and paste it into the community without manually describing versions, configs, or logs
+- **Preflight before updating** — check disk space, CLI compatibility, channel status, and Gateway state before upgrading
+- **Quick health checks** — review health score, Gateway uptime, Feishu/Telegram status, and recent errors at a glance
+- **Read-only config inspection** — inspect channel enablement, allowlists, `blockStreaming`, and related config health without editing files
 
 ## Features
 
@@ -65,17 +65,17 @@ Tested locally with OpenClaw `2026.5.3` on macOS. The dashboard includes `/api/c
 
 ## Quick Start
 
-**一行命令安装（macOS）：**
+**One-line install (macOS):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Micar2024/openclaw-dash/main/install.sh | bash
 ```
 
-完成后打开 `http://127.0.0.1:3000`。首次运行向导会引导你完成设置。
+After installation, open `http://127.0.0.1:3000`. The first-run wizard walks you through the setup checks.
 
-安装脚本会检测 Node.js，下载或更新源码，安装依赖，构建本地前端资源，并写入 macOS LaunchAgent。它不会覆盖已有本地改动；如果 `~/openclaw-dash` 不是 git 仓库，会先备份再安装。
+The installer checks Node.js, downloads or updates the source, installs dependencies, builds local frontend assets, and registers the macOS LaunchAgent. It does not overwrite local changes; if `~/openclaw-dash` is not a git repository, it backs it up before installing.
 
-**手动安装：**
+**Manual install:**
 
 ```bash
 git clone https://github.com/Micar2024/openclaw-dash.git
@@ -84,44 +84,44 @@ npm install
 npm start
 ```
 
-然后打开 `http://127.0.0.1:3000`。
+Then open `http://127.0.0.1:3000`.
 
-**装为 macOS 登录项（手动安装后）：**
+**Install as a macOS login item (after manual install):**
 
 ```bash
 bash scripts/install-macos.sh
 ```
 
-自动安装依赖、编译前端资源、写入 LaunchAgent 并启动服务。
+This installs dependencies, builds frontend assets, writes the LaunchAgent, and starts the service.
 
-（一行命令安装已包含此步骤，无需单独执行。）
+(The one-line installer already includes this step.)
 
-**遇到问题了？** 打开看板 → 点击「导出报告」或「导出求助包」→ 把脱敏结果贴到社区。报告和求助包已自动脱敏，包含版本、Gateway 状态、通道健康、系统资源、近期错误和诊断建议。
+**Need help?** Open the dashboard, click **Export Report** or **Export Bundle**, and paste the redacted output into the community. Reports and bundles include versions, Gateway status, channel health, system resources, recent errors, and recommendations.
 
-## 诊断原则
+## Diagnostic Principles
 
-OpenClaw Dash 的主线不是替代 OpenClaw，也不是做重型监控平台，而是生成一份社区能读懂的标准诊断报告。
+OpenClaw Dash is not a replacement for OpenClaw, and it is not a heavyweight monitoring platform. Its main job is to produce a standardized diagnostic report that the community can understand quickly.
 
-数据源按稳定性分层：
+Data sources are layered by reliability:
 
-- **第一层：本机事实** — Gateway 进程、日志文件、磁盘、内存、macOS、Node.js。这些不依赖 Gateway 是否正常。
-- **第二层：OpenClaw 基础 CLI** — `openclaw --version`、`openclaw doctor` 等用于补充版本和兼容性。
-- **第三层：OpenClaw JSON/探针能力** — 通道 probe、模型运行态等增强信息。失败时不会阻止报告生成。
+- **Layer 1: local facts** — Gateway processes, log files, disk, memory, macOS, and Node.js. These do not depend on Gateway being healthy.
+- **Layer 2: basic OpenClaw CLI** — `openclaw --version`, `openclaw doctor`, and related commands for version and compatibility context.
+- **Layer 3: OpenClaw JSON/probe capabilities** — channel probes, model runtime, and other enhanced signals. Failures do not block report generation.
 
-因此即使 Gateway 已经挂掉，Dashboard 也应该能导出半份有用报告：进程不在、最后日志时间、近期错误、系统状态、只读配置健康和版本线索。Markdown 报告采用分段容错策略，单个数据源失败不会阻止整份报告生成。
+Even when Gateway is down, the dashboard should still export a useful partial report: missing process, last log time, recent errors, system state, read-only config health, and version clues. Markdown reports use per-section fault tolerance, so one broken data source does not stop the whole report.
 
-## 和官方 Dashboard 的关系
+## Relationship With The Official Dashboard
 
-OpenClaw 官方 Dashboard / Control UI 是 Gateway 自带的操作界面，适合聊天、官方设置、Gateway 原生管理和 WebSocket 连接。OpenClaw Dash 不替代它，也不读取或保存官方 token。
+The official OpenClaw Dashboard / Control UI is the Gateway-native operation surface for chat, official settings, Gateway-native management, and WebSocket connections. OpenClaw Dash does not replace it and does not read or store official tokens.
 
-OpenClaw Dash 的互补点是诊断：
+OpenClaw Dash complements it through diagnostics:
 
-- 检测官方 Control UI 是否可达，并提供安全跳转入口
-- 只读展示官方 Gateway auth 是否存在（只显示 present/absent，不显示密钥值）
-- 在诊断报告和求助包里记录官方 UI 可达性、HTTP 状态和排障建议
-- 当官方 UI 进不去时，仍然从本机进程、日志、配置和系统资源生成报告
+- Check whether the official Control UI is reachable and provide a safe open link
+- Show official Gateway auth presence in read-only form (present/absent only, never secret values)
+- Record official UI reachability, HTTP status, and troubleshooting hints in reports and support bundles
+- When the official UI is unavailable, still generate reports from local processes, logs, config, and system resources
 
-简单理解：官方 Control UI 负责“操作 OpenClaw”，OpenClaw Dash 负责“把问题说清楚”。
+In short: the official Control UI operates OpenClaw; OpenClaw Dash explains the problem clearly.
 
 ## Configuration
 
@@ -205,35 +205,35 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.openclaw.dashboard.p
 launchctl kickstart -k gui/$(id -u)/com.openclaw.dashboard
 ```
 
-## 常见问题排查
+## Troubleshooting
 
-### Gateway 无法启动
+### Gateway fails to start
 
-1. 终端跑 `openclaw --version`，确认 CLI 可用
-2. 检查端口 18789 是否被占用：`lsof -i :18789`
-3. 检查 `~/.openclaw/openclaw.json` 是否有语法错误：`openclaw doctor`
-4. 从看板导出诊断报告去 [OpenClaw Discord](https://discord.com/invite/clawd) 求助
+1. Run `openclaw --version` in Terminal to confirm the CLI works
+2. Check whether port 18789 is already in use: `lsof -i :18789`
+3. Check `~/.openclaw/openclaw.json` for syntax issues: `openclaw doctor`
+4. Export a diagnostic report from the dashboard and ask for help in [OpenClaw Discord](https://discord.com/invite/clawd)
 
-### 飞书/Telegram 离线
+### Feishu/Telegram appears offline
 
-1. 等 5 分钟（Gateway 重连有缓冲区）
-2. 确认网络正常：`curl -I https://open.feishu.cn`
-3. 重启 Gateway（看板控制区点「重启」按钮）
-4. 如果飞书一直离线，检查应用后台 appSecret 是否过期
-5. 导出诊断报告，看「近期错误」面板是否有飞书/Telegram 相关报错
+1. Wait 5 minutes; Gateway reconnection has a buffer period
+2. Confirm network access: `curl -I https://open.feishu.cn`
+3. Restart Gateway from the dashboard control panel
+4. If Feishu stays offline, check whether the appSecret has expired
+5. Export a diagnostic report and check whether Recent Errors contains Feishu/Telegram entries
 
-### 健康评分持续偏低
+### Health score stays low
 
-- 确认所有通道在线
-- 检查近期错误面板是否有积压异常
-- 运行一次自检（看板「健康诊断」面板的「运行探测」按钮）
-- 截图导出（已自动脱敏）去社区求助
+- Confirm all channels are online
+- Check Recent Errors for accumulated failures
+- Run diagnostics from the Health Diagnostics panel
+- Export a screenshot (automatically redacted) and ask the community for help
 
-### 更新后看板异常
+### Dashboard behaves unexpectedly after updating
 
-- 看板自身的启动日志在 `~/openclaw-dash/logs/dashboard.err.log`
-- 确认 Node.js 版本 ≥18：`node -v`
-- 重新安装：`curl -fsSL https://raw.githubusercontent.com/Micar2024/openclaw-dash/main/install.sh | bash` 会自动更新
+- Dashboard startup logs live at `~/openclaw-dash/logs/dashboard.err.log`
+- Confirm Node.js is version 18 or newer: `node -v`
+- Reinstall with `curl -fsSL https://raw.githubusercontent.com/Micar2024/openclaw-dash/main/install.sh | bash`; it updates automatically
 
 ## Safety Notes
 

@@ -6,10 +6,10 @@ function registerChannelRoutes (app, deps) {
   app.post('/api/channels/verify', async (req, res) => {
     const channel = String(req.body?.channel || '').toLowerCase();
     if (!['feishu', 'telegram'].includes(channel)) {
-      return res.status(400).json({ success: false, message: '仅支持 feishu 或 telegram。' });
+      return res.status(400).json({ success: false, message: 'Only feishu or telegram is supported.' });
     }
     if (req.body?.confirm !== true) {
-      return res.status(400).json({ success: false, message: '真实通道验证会发送测试消息，需要显式确认。' });
+      return res.status(400).json({ success: false, message: 'Direct channel verification sends a test message and requires explicit confirmation.' });
     }
 
     try {

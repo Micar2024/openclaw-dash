@@ -6,25 +6,25 @@ const PROCESS_NAMES = {
   '/Applications/Google Chrome.app': 'Google Chrome',
   '/Applications/Google Chrome': 'Google Chrome',
   'Google Chrome': 'Google Chrome',
-  '/Applications/M-iM': '飞书/Lark',
-  '/Applications/Lark.app': '飞书/Lark',
-  Lark: '飞书/Lark',
-  Feishu: '飞书/Lark',
+  '/Applications/M-iM': 'Feishu/Lark',
+  '/Applications/Lark.app': 'Feishu/Lark',
+  Lark: 'Feishu/Lark',
+  Feishu: 'Feishu/Lark',
   claude: 'Claude',
-  '/Library/Input': '输入法',
-  input: '输入法',
-  Spotlight: 'Spotlight (聚焦搜索)',
-  mds_stores: 'mds_stores (索引)',
-  corespotlightd: 'corespotlightd (索引)',
-  Terminal: 'Terminal (终端)',
+  '/Library/Input': 'Input Method',
+  input: 'Input Method',
+  Spotlight: 'Spotlight (Search Index)',
+  mds_stores: 'mds_stores (Index)',
+  corespotlightd: 'corespotlightd (Index)',
+  Terminal: 'Terminal',
   node: 'Node.js',
   '/usr/local/bin/node': 'Node.js',
   python: 'Python',
   'O+Connect': 'OPPO Connect',
-  WeChatAppEx: '微信',
-  WeChat: '微信',
-  'com.tencent.xinWeChat': '微信',
-  '/Applications/M-eM': '微信'
+  WeChatAppEx: 'WeChat',
+  WeChat: 'WeChat',
+  'com.tencent.xinWeChat': 'WeChat',
+  '/Applications/M-eM': 'WeChat'
 };
 
 function getProcessDisplayName (cmd) {
@@ -35,10 +35,10 @@ function getProcessDisplayName (cmd) {
   const m = cmd.match(/\/([^/\s]+)\.app\//);
   if (m) {
     const app = m[1];
-    if (app.startsWith('M-iM')) return '飞书/Lark';
+    if (app.startsWith('M-iM')) return 'Feishu/Lark';
     if (app.includes('Telegram')) return 'Telegram';
     if (app.includes('Google')) return 'Google Chrome';
-    if (app.includes('Lark') || app.includes('Feishu')) return '飞书/Lark';
+    if (app.includes('Lark') || app.includes('Feishu')) return 'Feishu/Lark';
     if (app.includes('Claude')) return 'Claude';
     if (app.includes('O+Connect')) return 'OPPO Connect';
     return app;

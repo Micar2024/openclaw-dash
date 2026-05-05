@@ -25,7 +25,7 @@ function execJsonFile (file, args, timeoutMs = 15000) {
       try {
         resolve({ ok: true, error: null, data: JSON.parse(stdout.trim()) });
       } catch (parseError) {
-        resolve({ ok: false, error: `JSON 解析失败：${parseError.message}`, data: null, raw: stdout.trim().slice(-1000) });
+        resolve({ ok: false, error: `JSON parse failed: ${parseError.message}`, data: null, raw: stdout.trim().slice(-1000) });
       }
     });
   });
@@ -127,7 +127,7 @@ function resolveFeishuAppSecret (config) {
 
   const secretLocation = getFeishuSecretPath(config);
   if (!secretLocation.path) {
-    return { value: null, source: null, schema: null, file: null, warning: '未找到飞书凭据文件；推荐设置 OPENCLAW_DASH_FEISHU_APP_SECRET。' };
+    return { value: null, source: null, schema: null, file: null, warning: 'Feishu credential file was not found; setting OPENCLAW_DASH_FEISHU_APP_SECRET is recommended.' };
   }
 
   const secrets = readJsonFile(secretLocation.path) || {};
@@ -147,7 +147,7 @@ function resolveFeishuAppSecret (config) {
     source: secretLocation.source,
     schema: matchedPath || null,
     file: secretLocation.path,
-    warning: value ? null : '飞书凭据文件存在，但未识别到 appSecret；推荐设置 OPENCLAW_DASH_FEISHU_APP_SECRET。'
+    warning: value ? null : 'Feishu credential file exists, but appSecret was not recognized; setting OPENCLAW_DASH_FEISHU_APP_SECRET is recommended.'
   };
 }
 
@@ -177,8 +177,8 @@ async function getFeishuDirectProbe () {
   const creds = getFeishuCredentials();
   const baseUrl = creds.domain === 'larksuite' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
 
-  if (!creds.enabled) return { ok: false, error: '飞书通道未启用。', appId: creds.appId, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured };
-  if (!creds.appId || !creds.appSecret) return { ok: false, error: creds.credentialWarning || '飞书 App ID 或 App Secret 未读取到。', appId: creds.appId, appIdSource: creds.appIdSource, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured, credentialSource: creds.credentialSource, credentialSchema: creds.credentialSchema };
+  if (!creds.enabled) return { ok: false, error: 'Feishu channel is disabled.', appId: creds.appId, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured };
+  if (!creds.appId || !creds.appSecret) return { ok: false, error: creds.credentialWarning || 'Feishu App ID or App Secret could not be read.', appId: creds.appId, appIdSource: creds.appIdSource, connectionMode: creds.connectionMode, blockStreamingConfigured: creds.blockStreamingConfigured, credentialSource: creds.credentialSource, credentialSchema: creds.credentialSchema };
 
   try {
     const tokenResponse = await axios.post(`${baseUrl}/open-apis/auth/v3/tenant_access_token/internal`, {
@@ -187,7 +187,7 @@ async function getFeishuDirectProbe () {
     }, { timeout: 8000 });
 
     if (tokenResponse.data?.code !== 0 || !tokenResponse.data?.tenant_access_token) {
-      return { ok: false, error: tokenResponse.data?.msg || 'tenant_access_token 获取失败。', appId: creds.appId, appIdSource: creds.appIdSource, connectionMode: creds.connectionMode, credentialSource: creds.credentialSource, credentialSchema: creds.credentialSchema };
+      return { ok: false, error: tokenResponse.data?.msg || 'tenant_access_token fetch failed.', appId: creds.appId, appIdSource: creds.appIdSource, connectionMode: creds.connectionMode, credentialSource: creds.credentialSource, credentialSchema: creds.credentialSchema };
     }
 
     const headers = { Authorization: `Bearer ${tokenResponse.data.tenant_access_token}` };
@@ -202,7 +202,7 @@ async function getFeishuDirectProbe () {
 
     return {
       ok: pingOk,
-      error: pingOk ? null : (pingError?.response?.data?.msg || pingError?.response?.data?.message || pingError?.message || '飞书 bot ping 失败。'),
+      error: pingOk ? null : (pingError?.response?.data?.msg || pingError?.response?.data?.message || pingError?.message || 'Feishu bot ping failed.'),
       appId: creds.appId,
       appIdSource: creds.appIdSource,
       botOpenId: botError ? null : botInfo.data?.bot?.open_id || null,
@@ -235,36 +235,36 @@ function buildRecommendations ({ gatewayRunning, channels, openclawProbe, feishu
   const feishuGatewayProbe = openclawProbe?.channels?.feishu?.probe;
 
   if (!gatewayRunning) {
-    recommendations.push({ level: 'critical', title: 'Gateway 未运行', detail: '点上方「启动」按钮；如果启动失败，依次排查：① 确认 openclaw 命令可用（openclaw --version）② 检查 ~/.openclaw/openclaw.json 语法（openclaw doctor）③ 检查端口 18789 是否被占用（lsof -i :18789）。' });
+    recommendations.push({ level: 'critical', title: 'Gateway is not running', detail: 'Click Start above. If startup fails, check: 1. `openclaw --version`; 2. `openclaw doctor` for `~/.openclaw/openclaw.json`; 3. `lsof -i :18789` for port conflicts.' });
   }
 
   if (feishuDirect?.ok && feishuGatewayProbe && feishuGatewayProbe.ok === false) {
     const upgradeHint = version?.updateAvailable
-      ? `当前有新版本 ${version.latest}，建议先升级后复检；5.3 系列包含飞书 SDK 路径修复。`
-      : '可等待插件更新，或更新后重启 Gateway 再复检。';
+      ? `A newer version ${version.latest} is available; update first and rerun diagnostics. The 5.3 series includes the Feishu SDK path fix.`
+      : 'Wait for plugin updates, or update and restart Gateway before rerunning diagnostics.';
     recommendations.push({
       level: 'warning',
-      title: '飞书 API 正常，但 Gateway 探针失败',
-      detail: `当前更像是 OpenClaw/飞书插件运行态或长连接适配问题：${feishuGatewayProbe.error || '未知错误'}。${upgradeHint}`
+      title: 'Feishu API works, but the Gateway probe failed',
+      detail: `This looks more like an OpenClaw/Feishu plugin runtime or long-connection adaptation issue: ${feishuGatewayProbe.error || 'Unknown error'}.${upgradeHint}`
     });
   } else if (channels?.detail?.feishu?.status === 'offline') {
-    recommendations.push({ level: 'warning', title: '飞书通道离线', detail: (channels.detail.feishu.reason || '未检测到近期健康信号。') + ' 排查路径：① 确认网络可访问飞书开放平台（curl -I https://open.feishu.cn）② 检查飞书 appSecret 是否过期 ③ 重启 Gateway 后观察 5 分钟。' });
+    recommendations.push({ level: 'warning', title: 'Feishu channel offline', detail: (channels.detail.feishu.reason || 'No recent healthy signal detected.') + ' Troubleshooting: 1. confirm network access to the Feishu Open Platform (`curl -I https://open.feishu.cn`); 2. check whether the Feishu appSecret expired; 3. restart Gateway and observe for 5 minutes.' });
   }
 
   if (channels?.detail?.telegram?.status === 'offline') {
-    recommendations.push({ level: 'warning', title: 'Telegram 通道离线', detail: (channels.detail.telegram.reason || '未检测到近期健康信号。') + ' 排查路径：① 确认 botToken 是否有效 ② 检查 Telegram 服务器状态 ③ 重启 Gateway 后观察 5 分钟。' });
+    recommendations.push({ level: 'warning', title: 'Telegram channel offline', detail: (channels.detail.telegram.reason || 'No recent healthy signal detected.') + ' Troubleshooting: 1. confirm botToken validity; 2. check Telegram server status; 3. restart Gateway and observe for 5 minutes.' });
   }
 
   if (version?.updateAvailable) {
-    recommendations.push({ level: 'info', title: 'OpenClaw 有新版本', detail: `本地 ${version.local || '-'}，最新 ${version.latest || '-'}。建议在空闲时段执行更新。` });
+    recommendations.push({ level: 'info', title: 'OpenClaw update available', detail: `Local ${version.local || '-'}, latest ${version.latest || '-'}. Update during an idle window.` });
   }
 
   if (!model?.current) {
-    recommendations.push({ level: 'info', title: '未检测到当前模型', detail: '模型信息未能从配置或 Gateway 日志读取。发一条消息给机器人（任意内容），模型信息会在下次消息调用后自动刷新。如果持续无法检测，检查 openclaw.json 中 models.providers 配置是否有语法错误。' });
+    recommendations.push({ level: 'info', title: 'Current model not detected', detail: 'Model information could not be read from config or Gateway logs. Send any message to the bot; model data should refresh after the next model call. If it remains unavailable, check `models.providers` in `openclaw.json` for syntax errors.' });
   }
 
   if (!recommendations.length) {
-    recommendations.push({ level: 'ok', title: '核心状态正常', detail: 'Gateway、通道和模型没有发现新的高优先级异常。如果体验上仍感觉异常，导出诊断报告到社区求助。' });
+    recommendations.push({ level: 'ok', title: 'Core status healthy', detail: 'Gateway, channels, and model checks found no new high-priority issues. If the experience still feels wrong, export a diagnostic report and ask the community for help.' });
   }
 
   return recommendations;
@@ -338,13 +338,13 @@ async function runCommandCheck (name, file, args, timeoutMs = 12000, json = fals
 
 async function buildCompatibilityReport () {
   const checks = [];
-  checks.push(await runCommandCheck('OpenClaw CLI 可执行', OPENCLAW_BIN, ['--version'], 5000));
-  checks.push(await runCommandCheck('daemon 控制命令可用', OPENCLAW_BIN, ['daemon', '--help'], 8000));
-  checks.push(await runCommandCheck('channels status 帮助可用', OPENCLAW_BIN, ['channels', 'status', '--help'], 8000));
-  checks.push(await runCommandCheck('doctor 命令可用', OPENCLAW_BIN, ['doctor', '--help'], 8000));
-  checks.push(await runCommandCheck('update 命令可用', OPENCLAW_BIN, ['update', '--help'], 8000));
+  checks.push(await runCommandCheck('OpenClaw CLI executable', OPENCLAW_BIN, ['--version'], 5000));
+  checks.push(await runCommandCheck('daemon control command available', OPENCLAW_BIN, ['daemon', '--help'], 8000));
+  checks.push(await runCommandCheck('channels status help available', OPENCLAW_BIN, ['channels', 'status', '--help'], 8000));
+  checks.push(await runCommandCheck('doctor command available', OPENCLAW_BIN, ['doctor', '--help'], 8000));
+  checks.push(await runCommandCheck('update command available', OPENCLAW_BIN, ['update', '--help'], 8000));
 
-  const probe = await runCommandCheck('channels status --probe --json 结构', OPENCLAW_BIN, ['channels', 'status', '--probe', '--json'], 35000, true);
+  const probe = await runCommandCheck('channels status --probe --json schema', OPENCLAW_BIN, ['channels', 'status', '--probe', '--json'], 35000, true);
   const channels = probe.data?.channels || {};
   const channelNames = Object.keys(channels);
   const schemaOk = Boolean(probe.ok && channelNames.length && channelNames.every((name) => typeof channels[name] === 'object'));
@@ -353,7 +353,7 @@ async function buildCompatibilityReport () {
     ok: schemaOk,
     requiredFields: ['channels.<name>'],
     detectedChannels: channelNames,
-    error: schemaOk ? null : (probe.error || 'JSON 缺少 channels 通道状态对象。')
+    error: schemaOk ? null : (probe.error || 'JSON is missing the channels status object.')
   });
 
   const required = checks.length;

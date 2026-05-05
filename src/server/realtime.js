@@ -29,7 +29,7 @@ function attachRealtimeServer (server, options) {
     try {
       sendJson(ws, { type: 'snapshot', data: await options.collectSnapshot() });
     } catch (error) {
-      sendJson(ws, { type: 'error', message: error.message || '实时状态读取失败。' });
+      sendJson(ws, { type: 'error', message: error.message || 'Realtime status read failed.' });
     }
   }
 

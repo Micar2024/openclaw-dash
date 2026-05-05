@@ -40,7 +40,7 @@ function registerLogRoutes (app, deps) {
     const { id, enabled } = req.body || {};
     const rules = deps.loadLogMuteRules();
     const target = rules.find((rule) => rule.id === id);
-    if (!target) return res.status(404).json({ success: false, message: '未知日志降噪规则。' });
+    if (!target) return res.status(404).json({ success: false, message: 'Unknown log muting rule.' });
 
     target.enabled = Boolean(enabled);
     deps.persistLogMuteRules(rules);

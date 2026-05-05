@@ -4,17 +4,17 @@ function authFetch(url, options = {}) {
   options.headers = { ...(options.headers || {}) };
   return fetch(url, options).then(async (res) => {
     if (res.status === 401 && url.startsWith('/api/')) {
-      showLogin('登录已失效，请重新登录。');
+      showLogin('Session expired. Please sign in again.');
       throw new Error('Unauthorized');
     }
     if (!res.ok && url.startsWith('/api/')) {
       res.clone().json()
-        .then((data) => showApiError(data.message || data.error || '接口请求失败', data.detail || data.reason || `HTTP ${res.status}`))
-        .catch(() => showApiError('接口请求失败', `HTTP ${res.status}`));
+        .then((data) => showApiError(data.message || data.error || 'API request failed', data.detail || data.reason || `HTTP ${res.status}`))
+        .catch(() => showApiError('API request failed', `HTTP ${res.status}`));
     }
     return res;
   }).catch((error) => {
-    if (error.message !== 'Unauthorized') showApiError('网络请求失败', error.message);
+    if (error.message !== 'Unauthorized') showApiError('Network request failed', error.message);
     throw error;
   });
 }
@@ -31,8 +31,8 @@ function hideLogin() {
 let apiErrorTimer = null;
 
 function showApiError(title, detail) {
-  apiErrorTitleEl.textContent = title || '请求失败';
-  apiErrorDetailEl.textContent = detail || '请稍后重试，或检查 dashboard 后端日志。';
+  apiErrorTitleEl.textContent = title || 'Request failed';
+  apiErrorDetailEl.textContent = detail || 'Please retry later or check the dashboard backend logs.';
   apiErrorToastEl.classList.remove('hidden');
   clearTimeout(apiErrorTimer);
   apiErrorTimer = setTimeout(hideApiError, 7000);
@@ -45,16 +45,16 @@ function hideApiError() {
 async function localLogin() {
   localLoginBtn.disabled = true;
   tokenLoginBtn.disabled = true;
-  loginMessageEl.textContent = '正在建立本机会话...';
+  loginMessageEl.textContent = 'Creating local session...';
   try {
     const response = await fetch('/api/auth/local-login', { method: 'POST', credentials: 'same-origin' });
     const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.message || '本机登录失败。');
+    if (!response.ok || !data.success) throw new Error(data.message || 'Local sign-in failed.');
     hideLogin();
     refreshRuntimeState();
     connectRealtime();
   } catch (error) {
-    loginMessageEl.textContent = error.message || '本机登录失败，请使用访问口令登录。';
+    loginMessageEl.textContent = error.message || 'Local sign-in failed. Please use the access token.';
     loginScreenEl.classList.remove('hidden');
   } finally {
     localLoginBtn.disabled = false;
@@ -65,13 +65,13 @@ async function localLogin() {
 async function tokenLogin() {
   const token = tokenInputEl.value.trim();
   if (!token) {
-    loginMessageEl.textContent = '请输入访问口令。';
+    loginMessageEl.textContent = 'Please enter the access token.';
     return;
   }
 
   localLoginBtn.disabled = true;
   tokenLoginBtn.disabled = true;
-  loginMessageEl.textContent = '正在验证口令...';
+  loginMessageEl.textContent = 'Verifying token...';
   try {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
@@ -80,13 +80,13 @@ async function tokenLogin() {
       body: JSON.stringify({ token }),
     });
     const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.message || '登录失败。');
+    if (!response.ok || !data.success) throw new Error(data.message || 'Sign-in failed.');
     tokenInputEl.value = '';
     hideLogin();
     refreshRuntimeState();
     connectRealtime();
   } catch (error) {
-    loginMessageEl.textContent = error.message || '登录失败。';
+    loginMessageEl.textContent = error.message || 'Sign-in failed.';
   } finally {
     localLoginBtn.disabled = false;
     tokenLoginBtn.disabled = false;
@@ -98,7 +98,7 @@ async function logout() {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
   } catch {}
   closeRealtime();
-  showLogin('已退出登录。');
+  showLogin('Signed out.');
 }
 
 // --- DOM elements ---
@@ -199,9 +199,9 @@ let isUpdateDetailsExpanded = false;
 let lastUpdateJobStatus = null;
 
 const actionLabels = {
-  start: '启动',
-  restart: '重启',
-  stop: '停止',
+  start: 'Start',
+  restart: 'Restart',
+  stop: 'Stop',
 };
 
 function escapeHtml(value) {
@@ -223,7 +223,7 @@ function renderStatusPill(el, ok, label) {
 }
 
 function renderMiniRows(items) {
-  if (!items || !items.length) return '<p class="text-zinc-600">暂无数据。</p>';
+  if (!items || !items.length) return '<p class="text-zinc-600">No data.</p>';
   return items.map((item) => {
     const ok = item.ok !== false;
     const dot = ok ? 'bg-emerald-500' : 'bg-amber-500';
@@ -277,7 +277,7 @@ function buildExportTarget() {
 
   for (const button of contentClone.querySelectorAll('button')) {
     if (button.closest('#update-progress-panel') || button.closest('#diagnostics-probe-btn')) continue;
-    if (button.textContent.includes('刷新') || button.textContent.includes('复制')) button.remove();
+    if (button.textContent.includes('Refresh') || button.textContent.includes('Copy')) button.remove();
   }
 
   const gatewayPanel = contentClone.querySelector('#gateway-control-panel');
@@ -322,13 +322,13 @@ function buildExportTarget() {
 
 async function exportDashboardImage() {
   if (!window.html2canvas) {
-    alert('截图组件加载失败，请检查网络后刷新页面。');
+    alert('Screenshot component failed to load. Please check the network and refresh.');
     return;
   }
 
   exportScreenshotBtn.disabled = true;
   const oldText = exportScreenshotBtn.textContent;
-  exportScreenshotBtn.textContent = '导出中...';
+  exportScreenshotBtn.textContent = 'Exporting...';
   let exportTarget = null;
   try {
     exportTarget = buildExportTarget();
@@ -349,7 +349,7 @@ async function exportDashboardImage() {
     link.click();
     URL.revokeObjectURL(url);
   } catch (error) {
-    alert('导出长图失败：' + error.message);
+    alert('Image export failed: ' + error.message);
   } finally {
     if (exportTarget) exportTarget.remove();
     exportScreenshotBtn.disabled = false;
@@ -360,10 +360,10 @@ async function exportDashboardImage() {
 async function exportMarkdownReport() {
   exportReportBtn.disabled = true;
   const oldText = exportReportBtn.textContent;
-  exportReportBtn.textContent = '导出中...';
+  exportReportBtn.textContent = 'Exporting...';
   try {
     const response = await authFetch('/api/report.md');
-    if (!response.ok) throw new Error('报告接口返回异常。');
+    if (!response.ok) throw new Error('Report API returned an error.');
     const markdown = await response.text();
     const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -373,7 +373,7 @@ async function exportMarkdownReport() {
     link.click();
     URL.revokeObjectURL(url);
   } catch (error) {
-    showApiError('报告导出失败', error.message);
+    showApiError('Report export failed', error.message);
   } finally {
     exportReportBtn.disabled = false;
     exportReportBtn.textContent = oldText;
@@ -383,10 +383,10 @@ async function exportMarkdownReport() {
 async function exportSupportBundle() {
   exportBundleBtn.disabled = true;
   const oldText = exportBundleBtn.textContent;
-  exportBundleBtn.textContent = '导出中...';
+  exportBundleBtn.textContent = 'Exporting...';
   try {
     const response = await authFetch('/api/support-bundle.tgz');
-    if (!response.ok) throw new Error('求助包接口返回异常。');
+    if (!response.ok) throw new Error('Support bundle API returned an error.');
     const bundle = await response.blob();
     const url = URL.createObjectURL(bundle);
     const link = document.createElement('a');
@@ -395,7 +395,7 @@ async function exportSupportBundle() {
     link.click();
     URL.revokeObjectURL(url);
   } catch (error) {
-    showApiError('求助包导出失败', error.message);
+    showApiError('Support bundle export failed', error.message);
   } finally {
     exportBundleBtn.disabled = false;
     exportBundleBtn.textContent = oldText;
@@ -408,11 +408,11 @@ async function loadLocalVersion() {
     const response = await authFetch('/api/version');
     const data = await response.json();
 
-    localVersionEl.textContent = data.version || '未安装';
-    localMessageEl.textContent = data.message || '本地版本检查完成。';
+    localVersionEl.textContent = data.version || 'Not installed';
+    localMessageEl.textContent = data.message || 'Local version check completed.';
   } catch (error) {
-    localVersionEl.textContent = '读取失败';
-    localMessageEl.textContent = '无法连接后端服务，请确认 Node.js 服务正在运行。';
+    localVersionEl.textContent = 'Read failed';
+    localMessageEl.textContent = 'Cannot reach the backend service. Please confirm the Node.js service is running.';
   }
 }
 
@@ -422,18 +422,18 @@ async function loadLatestVersion() {
     const data = await response.json();
 
     if (!response.ok || !data.success) {
-      latestVersionEl.textContent = '获取失败';
-      latestMessageEl.textContent = data.message || '无法获取官方最新版本。';
+      latestVersionEl.textContent = 'Fetch failed';
+      latestMessageEl.textContent = data.message || 'Could not fetch the latest official version.';
       return;
     }
 
-    latestVersionEl.textContent = data.latestVersion || '未知版本';
+    latestVersionEl.textContent = data.latestVersion || 'Unknown version';
     latestMessageEl.textContent = data.publishedAt
-      ? `发布时间：${new Date(data.publishedAt).toLocaleString()}`
-      : `版本源：${compactVersionSource(data.source)}`;
+      ? `Published at: ${new Date(data.publishedAt).toLocaleString()}`
+      : `Version source: ${compactVersionSource(data.source)}`;
   } catch (error) {
-    latestVersionEl.textContent = '获取失败';
-    latestMessageEl.textContent = '无法连接后端服务，请确认 Node.js 服务正在运行。';
+    latestVersionEl.textContent = 'Fetch failed';
+    latestMessageEl.textContent = 'Cannot reach the backend service. Please confirm the Node.js service is running.';
   }
 }
 
@@ -448,7 +448,7 @@ function normalizeChannelItems(source) {
 function renderChannels(channels) {
   const items = normalizeChannelItems(channels);
   if (!items.length) {
-    channelsGridEl.innerHTML = '<article class="rounded-lg border border-white/10 bg-white/[0.04] p-6 text-sm text-zinc-500">未发现已配置通道。</article>';
+    channelsGridEl.innerHTML = '<article class="rounded-lg border border-white/10 bg-white/[0.04] p-6 text-sm text-zinc-500">No configured channels found.</article>';
     return;
   }
 
@@ -458,7 +458,7 @@ function renderChannels(channels) {
     const statusClass = isOnline ? 'text-emerald-500' : 'text-rose-500';
     const dotClass = isOnline ? 'bg-emerald-500' : 'bg-rose-500';
     const stats = channel.stats || {};
-    const lastSeen = channel.lastSeenAt ? '最后活动: ' + new Date(channel.lastSeenAt).toLocaleString() : '暂无活动时间';
+    const lastSeen = channel.lastSeenAt ? 'Last activity: ' + new Date(channel.lastSeenAt).toLocaleString() : 'No activity timestamp';
     const verification = channel.verification || {};
     const confidenceClass = verification.confidence === 'high'
       ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
@@ -466,12 +466,12 @@ function renderChannels(channels) {
         ? 'border-sky-400/20 bg-sky-400/10 text-sky-300'
         : 'border-amber-400/20 bg-amber-400/10 text-amber-200';
     const verifyBadge = channel.supportsVerify
-      ? '<span class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">支持真实验证</span>'
-      : '<span class="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-500">日志/探针监测</span>';
-    const trustBadge = `<span class="rounded-md border px-2 py-1 text-[11px] ${confidenceClass}">${escapeHtml(verification.label || '可信度未知')}</span>`;
+      ? '<span class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">Direct verification supported</span>'
+      : '<span class="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-500">Log/probe monitored</span>';
+    const trustBadge = `<span class="rounded-md border px-2 py-1 text-[11px] ${confidenceClass}">${escapeHtml(verification.label || 'Unknown confidence')}</span>`;
     return `<article class="flex h-full min-h-[330px] flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
       <div class="flex items-center justify-between gap-4">
-        <p class="min-w-0 truncate text-sm font-medium text-zinc-400">${escapeHtml(channel.label || channel.id || '未知通道')}</p>
+        <p class="min-w-0 truncate text-sm font-medium text-zinc-400">${escapeHtml(channel.label || channel.id || 'Unknown channel')}</p>
         <span class="h-3 w-3 shrink-0 rounded-full ${dotClass}"></span>
       </div>
       <div class="mt-4 flex min-h-8 flex-wrap items-start gap-2">
@@ -487,15 +487,15 @@ function renderChannels(channels) {
       </div>
       <div class="mt-auto grid grid-cols-3 gap-3 pt-6 text-xs">
         <div class="min-h-[70px] rounded-md bg-zinc-950/40 px-3 py-3">
-          <p class="text-zinc-600">今日</p>
+          <p class="text-zinc-600">Today</p>
           <p class="mt-1 font-semibold text-zinc-200">${escapeHtml(stats.todayMessages ?? '-')}</p>
         </div>
         <div class="min-h-[70px] rounded-md bg-zinc-950/40 px-3 py-3">
-          <p class="text-zinc-600">1 小时</p>
+          <p class="text-zinc-600">1 hour</p>
           <p class="mt-1 font-semibold text-zinc-200">${escapeHtml(stats.lastHourMessages ?? '-')}</p>
         </div>
         <div class="min-h-[70px] rounded-md bg-zinc-950/40 px-3 py-3">
-          <p class="text-zinc-600">错误</p>
+          <p class="text-zinc-600">Errors</p>
           <p class="mt-1 font-semibold text-rose-300">${escapeHtml(stats.errorCount ?? '-')}</p>
         </div>
       </div>
@@ -513,13 +513,13 @@ function renderGatewayRunning(isRunning, updateMessage = true) {
   }`;
   if (updateMessage && !isControlRequestActive) {
     controlMessageEl.textContent = isRunning
-      ? 'Gateway 进程正在运行。'
-      : 'Gateway 进程当前未运行。';
+      ? 'Gateway process is running.'
+      : 'Gateway process is not running.';
   }
 }
 
 function renderUpdateJob(job) {
-  job = job || { status: 'idle', running: false, message: '暂无更新任务。', steps: [] };
+  job = job || { status: 'idle', running: false, message: 'No update job.', steps: [] };
 
   const isRunning = Boolean(job.running);
   const steps = job.steps || [];
@@ -539,10 +539,10 @@ function renderUpdateJob(job) {
           : 'border-white/10 bg-white/[0.025]'
   );
   updateProgressMessage.textContent = isRunning
-    ? (job.message || '更新任务处理中。')
+    ? (job.message || 'Update job is running.')
     : job.status === 'idle'
-      ? '暂无更新任务。点击“更新系统”后，这里会显示实时步骤。'
-      : `${job.message || '更新任务已结束。'}${lastStep ? ` 最后步骤：${lastStep.name} · ${lastStep.status}` : ''}`;
+      ? 'No update job. Click “Update System” to show live steps here.'
+      : `${job.message || 'Update job finished.'}${lastStep ? ` Last step: ${lastStep.name} · ${lastStep.status}` : ''}`;
   updateStatusPill.textContent = job.status || 'idle';
   updateStatusPill.className = 'rounded-md border px-3 py-1 text-xs ' + (
     job.status === 'success'
@@ -580,10 +580,10 @@ function renderUpdateJob(job) {
 
   updateProgressDetails.classList.toggle('hidden', !isUpdateDetailsExpanded);
   updateDetailsToggle.classList.toggle('hidden', isRunning || steps.length === 0);
-  updateDetailsToggle.textContent = isUpdateDetailsExpanded ? '收起详情' : '展开详情';
+  updateDetailsToggle.textContent = isUpdateDetailsExpanded ? 'Hide Details' : 'Show Details';
 
   updateBtnEl.disabled = isRunning;
-  updateBtnEl.textContent = isRunning ? '更新中...' : '更新系统';
+  updateBtnEl.textContent = isRunning ? 'Updating...' : 'Update System';
   if (job.status === 'success' || job.postUpdateDiagnostics) {
     postUpdateProbeBtn.classList.remove('hidden');
   } else {
@@ -594,14 +594,14 @@ function renderUpdateJob(job) {
 function toggleUpdateDetails() {
   isUpdateDetailsExpanded = !isUpdateDetailsExpanded;
   updateProgressDetails.classList.toggle('hidden', !isUpdateDetailsExpanded);
-  updateDetailsToggle.textContent = isUpdateDetailsExpanded ? '收起详情' : '展开详情';
+  updateDetailsToggle.textContent = isUpdateDetailsExpanded ? 'Hide Details' : 'Show Details';
 }
 
 async function loadHealthSummary() {
   try {
     const response = await authFetch('/api/health/summary');
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || '健康摘要读取失败。');
+    if (!response.ok) throw new Error(data.error || 'Failed to read health summary.');
 
     const score = Number(data.score || 0);
     const tone = score >= 90
@@ -614,7 +614,7 @@ async function loadHealthSummary() {
 
     healthScoreEl.textContent = `${score}`;
     healthScoreEl.className = `mt-3 text-5xl font-semibold ${tone.score}`;
-    healthSummaryEl.textContent = data.summary || '健康摘要已刷新。';
+    healthSummaryEl.textContent = data.summary || 'Health summary refreshed.';
     healthLevelEl.textContent = tone.text;
     healthLevelEl.className = `rounded-md border px-3 py-1 text-xs ${tone.pill}`;
     healthChecksEl.innerHTML = renderMiniRows((data.checks || []).map((check) => ({
@@ -622,7 +622,7 @@ async function loadHealthSummary() {
       ok: check.ok,
       detail: check.detail,
     })));
-    healthUpdatedEl.textContent = data.collectedAt ? '更新于 ' + new Date(data.collectedAt).toLocaleString() : '已刷新';
+    healthUpdatedEl.textContent = data.collectedAt ? 'Updated at ' + new Date(data.collectedAt).toLocaleString() : 'Refreshed';
   } catch (error) {
     healthScoreEl.textContent = '--';
     healthScoreEl.className = 'mt-3 text-5xl font-semibold text-rose-300';
@@ -633,27 +633,27 @@ async function loadHealthSummary() {
 }
 
 async function loadSetupStatus() {
-  setupSummaryEl.textContent = '正在检查环境...';
+  setupSummaryEl.textContent = 'Checking environment...';
   try {
     const response = await authFetch('/api/setup/status');
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || '首次启动向导读取失败。');
+    if (!response.ok) throw new Error(data.error || 'Failed to read first-run wizard status.');
 
-    setupSummaryEl.textContent = data.ok ? '启动环境已就绪' : `${data.passed}/${data.required} 项通过`;
+    setupSummaryEl.textContent = data.ok ? 'Startup environment is ready' : `${data.passed}/${data.required} checks passed`;
     setupSummaryEl.className = `mt-3 text-2xl font-semibold ${data.ok ? 'text-emerald-300' : 'text-amber-300'}`;
     setupUpdatedEl.textContent = data.remoteMode
-      ? `当前为局域网监听 ${data.host}:${data.port}，请只在可信网络使用。`
-      : `本机安全模式 ${data.host}:${data.port} · ${new Date(data.collectedAt).toLocaleString()}`;
+      ? `Listening on LAN at ${data.host}:${data.port}; use only on trusted networks.`
+      : `Local-only safe mode ${data.host}:${data.port} · ${new Date(data.collectedAt).toLocaleString()}`;
     setupListEl.innerHTML = renderMiniRows(data.checks || []);
   } catch (error) {
-    setupSummaryEl.textContent = '环境检查失败';
+    setupSummaryEl.textContent = 'Environment check failed';
     setupSummaryEl.className = 'mt-3 text-2xl font-semibold text-rose-300';
     setupUpdatedEl.textContent = error.message;
   }
 }
 
 async function loadAssurance() {
-  assuranceSummaryEl.textContent = '正在体检...';
+  assuranceSummaryEl.textContent = 'Checking...';
   try {
     const [compatibility, preflight, versionSources, configHealth, logRules] = await Promise.all([
       authFetch('/api/compatibility').then((res) => res.json()),
@@ -668,9 +668,9 @@ async function loadAssurance() {
       !preflight.ok && preflight.updateAvailable,
       (versionSources.sources || []).every((source) => !source.ok),
     ].filter(Boolean).length;
-    assuranceSummaryEl.textContent = attention ? `发现 ${attention} 项需要关注` : '系统保障项正常';
+    assuranceSummaryEl.textContent = attention ? `Found ${attention} items needing attention` : 'Assurance checks are healthy';
     assuranceSummaryEl.className = `mt-3 text-2xl font-semibold ${attention ? 'text-amber-300' : 'text-emerald-300'}`;
-    assuranceUpdatedEl.textContent = '体检于 ' + new Date().toLocaleString();
+    assuranceUpdatedEl.textContent = 'Checked at ' + new Date().toLocaleString();
 
     renderStatusPill(compatibilityPillEl, compatibility.ok, `${compatibility.passed}/${compatibility.required}`);
     compatibilityListEl.innerHTML = renderMiniRows((compatibility.checks || []).slice(0, 6).map((check) => ({
@@ -679,7 +679,7 @@ async function loadAssurance() {
       detail: check.ok ? check.command : (check.error || check.command),
     })));
 
-    renderStatusPill(preflightPillEl, preflight.ok, preflight.updateAvailable ? '可升级' : '无更新');
+    renderStatusPill(preflightPillEl, preflight.ok, preflight.updateAvailable ? 'Update available' : 'No update');
     preflightListEl.innerHTML = renderMiniRows(preflight.checks || []);
 
     versionSourcesListEl.innerHTML = renderMiniRows((versionSources.sources || []).map((source) => ({
@@ -691,10 +691,10 @@ async function loadAssurance() {
           configHealthListEl.innerHTML = renderMiniRows((configHealth.channels || []).map((channel) => ({
             name: `${channel.channel} · ${channel.enabled ? 'enabled' : 'disabled'}`,
             ok: channel.enabled,
-            detail: `allowFrom ${channel.allowFromCount}, group ${channel.groupAllowFromCount}, blockStreaming ${channel.blockStreamingConfigured ? channel.blockStreaming : '未配置'}`,
+            detail: `allowFrom ${channel.allowFromCount}, group ${channel.groupAllowFromCount}, blockStreaming ${channel.blockStreamingConfigured ? channel.blockStreaming : 'Not configured'}`,
           })));
 
-    logRulesPillEl.textContent = `${logRules.activeCount || 0} 条启用`;
+    logRulesPillEl.textContent = `${logRules.activeCount || 0} enabled`;
     logRulesListEl.innerHTML = (logRules.rules || []).map((rule) => `
       <label class="flex items-start gap-3 rounded-md border border-white/5 bg-white/[0.025] px-3 py-2">
         <input type="checkbox" class="mt-0.5 accent-emerald-500" ${rule.enabled ? 'checked' : ''} onchange="toggleLogRule('${escapeHtml(rule.id)}', this.checked)" />
@@ -705,7 +705,7 @@ async function loadAssurance() {
       </label>
     `).join('');
   } catch (error) {
-    assuranceSummaryEl.textContent = '体检失败';
+    assuranceSummaryEl.textContent = 'Assurance check failed';
     assuranceSummaryEl.className = 'mt-3 text-2xl font-semibold text-rose-300';
     assuranceUpdatedEl.textContent = error.message;
   }
@@ -713,20 +713,20 @@ async function loadAssurance() {
 
 function renderOfficialDashboard(data) {
   const reachable = Boolean(data.reachable);
-  officialDashboardSummaryEl.textContent = reachable ? '官方 Dashboard 可达' : '官方 Dashboard 未响应';
+  officialDashboardSummaryEl.textContent = reachable ? 'Official Dashboard reachable' : 'Official Dashboard not responding';
   officialDashboardSummaryEl.className = `mt-3 text-2xl font-semibold ${reachable ? 'text-emerald-300' : 'text-amber-300'}`;
-  officialDashboardDetailEl.textContent = data.recommendation || '官方 Control UI 状态已刷新。';
+  officialDashboardDetailEl.textContent = data.recommendation || 'Official Control UI status refreshed.';
   officialDashboardLinkEl.href = data.url || 'http://127.0.0.1:18789/';
   officialDashboardLinkEl.className = 'self-start rounded-md px-4 py-2 text-sm font-semibold text-white transition ' + (
     reachable ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-zinc-700 hover:bg-zinc-600'
   );
 
   const authText = data.auth?.configured
-    ? `已配置${data.auth.mode ? ' · ' + data.auth.mode : ''}`
-    : '未检测到显式配置';
+    ? `Configured${data.auth.mode ? ' · ' + data.auth.mode : ''}`
+    : 'No explicit config found';
   officialDashboardFactsEl.innerHTML = [
-    { name: '访问地址', ok: reachable, detail: data.url || '-' },
-    { name: 'HTTP 状态', ok: reachable, detail: data.httpStatus || data.error || '-' },
+    { name: 'URL', ok: reachable, detail: data.url || '-' },
+    { name: 'HTTP status', ok: reachable, detail: data.httpStatus || data.error || '-' },
     { name: 'Gateway Auth', ok: data.auth?.configured, detail: authText },
   ].map((item) => `<div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
     <p class="text-zinc-600">${escapeHtml(item.name)}</p>
@@ -737,7 +737,7 @@ function renderOfficialDashboard(data) {
 function renderTroubleshooting(data) {
   const steps = data.steps || [];
   const warningCount = steps.filter((step) => ['critical', 'warning'].includes(step.level)).length;
-  troubleshootingSummaryEl.textContent = warningCount ? `${warningCount} 条优先排查` : '排障路径清晰';
+  troubleshootingSummaryEl.textContent = warningCount ? `${warningCount} priority checks` : 'Troubleshooting path is clear';
   troubleshootingSummaryEl.className = `mt-3 text-2xl font-semibold ${warningCount ? 'text-amber-300' : 'text-emerald-300'}`;
   const tone = {
     ok: 'border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-200',
@@ -759,21 +759,21 @@ async function loadOfficialDashboard() {
     const data = await response.json();
     renderOfficialDashboard(data);
   } catch (error) {
-    officialDashboardSummaryEl.textContent = '检测失败';
+    officialDashboardSummaryEl.textContent = 'Check failed';
     officialDashboardSummaryEl.className = 'mt-3 text-2xl font-semibold text-rose-300';
     officialDashboardDetailEl.textContent = error.message;
   }
 }
 
 async function loadTroubleshooting() {
-  troubleshootingSummaryEl.textContent = '正在分析...';
+  troubleshootingSummaryEl.textContent = 'Analyzing...';
   try {
     const response = await authFetch('/api/troubleshooting');
     const data = await response.json();
     renderTroubleshooting(data);
     if (data.officialDashboard) renderOfficialDashboard(data.officialDashboard);
   } catch (error) {
-    troubleshootingSummaryEl.textContent = '分析失败';
+    troubleshootingSummaryEl.textContent = 'Analysis failed';
     troubleshootingSummaryEl.className = 'mt-3 text-2xl font-semibold text-rose-300';
     troubleshootingListEl.innerHTML = `<p class="text-zinc-500">${escapeHtml(error.message)}</p>`;
   }
@@ -789,7 +789,7 @@ async function toggleLogRule(id, enabled) {
     loadErrors();
     loadAssurance();
   } catch (error) {
-    alert('日志降噪规则更新失败：' + error.message);
+    alert('Failed to update log muting rule: ' + error.message);
   }
 }
 
@@ -824,10 +824,10 @@ async function loadChannels() {
     const data = await response.json();
 
     renderChannels(data);
-    channelsUpdatedAtEl.textContent = `更新于 ${new Date().toLocaleTimeString()}`;
+    channelsUpdatedAtEl.textContent = `Updated at ${new Date().toLocaleTimeString()}`;
   } catch (error) {
     renderChannels([]);
-    channelsUpdatedAtEl.textContent = '刷新失败';
+    channelsUpdatedAtEl.textContent = 'Refresh failed';
   }
 }
 
@@ -845,7 +845,7 @@ async function loadGatewayStatus(options = {}) {
     gatewayStatusEl.className = 'text-2xl font-semibold text-zinc-300';
     gatewayDotEl.className = 'h-3 w-3 rounded-full bg-zinc-600';
     if (updateMessage && !isControlRequestActive) {
-      controlMessageEl.textContent = '无法读取 Gateway 运行状态。';
+      controlMessageEl.textContent = 'Unable to read Gateway status.';
     }
   }
 }
@@ -865,8 +865,8 @@ function formatNumber(value) {
 
 function renderModel(model) {
   if (!model || !model.current) {
-    modelCurrentEl.textContent = '未检测到模型';
-    modelSourceEl.textContent = '未能从 OpenClaw 配置或日志中读取模型。';
+    modelCurrentEl.textContent = 'No model detected';
+    modelSourceEl.textContent = 'Could not read model data from OpenClaw config or logs.';
     modelProviderEl.textContent = '-';
     modelContextEl.textContent = '-';
     modelMaxTokensEl.textContent = '-';
@@ -879,21 +879,21 @@ function renderModel(model) {
   modelProviderEl.textContent = model.provider || '-';
   modelContextEl.textContent = formatNumber(model.contextWindow);
   modelMaxTokensEl.textContent = formatNumber(model.maxTokens);
-  modelReasoningEl.textContent = model.reasoning == null ? '-' : model.reasoning ? '支持' : '不支持';
+  modelReasoningEl.textContent = model.reasoning == null ? '-' : model.reasoning ? 'Supported' : 'Unsupported';
 
-  const sourceText = model.source === 'gateway.log' ? '网关日志确认' : '配置文件';
+  const sourceText = model.source === 'gateway.log' ? 'Gateway log confirmed' : 'Config file';
   modelSourceEl.textContent = model.lastSeenAt
     ? `${sourceText} · ${new Date(model.lastSeenAt).toLocaleString()}`
-    : `${sourceText} · 当前默认模型`;
+    : `${sourceText} · Current default model`;
   modelFallbacksEl.textContent = Array.isArray(model.fallbacks) && model.fallbacks.length
     ? `Fallbacks: ${model.fallbacks.join(' / ')}`
     : '';
 }
 
 function diagnosticTone(ok, warning) {
-  if (ok) return { text: '正常', dot: 'bg-emerald-500', textClass: 'text-emerald-300', border: 'border-emerald-400/15' };
-  if (warning) return { text: '异常', dot: 'bg-amber-500', textClass: 'text-amber-300', border: 'border-amber-400/15' };
-  return { text: '异常', dot: 'bg-rose-500', textClass: 'text-rose-300', border: 'border-rose-400/15' };
+  if (ok) return { text: 'OK', dot: 'bg-emerald-500', textClass: 'text-emerald-300', border: 'border-emerald-400/15' };
+  if (warning) return { text: 'Issue', dot: 'bg-amber-500', textClass: 'text-amber-300', border: 'border-amber-400/15' };
+  return { text: 'Issue', dot: 'bg-rose-500', textClass: 'text-rose-300', border: 'border-rose-400/15' };
 }
 
 function renderDiagnosticCard(title, statusText, detail, tone) {
@@ -917,18 +917,18 @@ function renderDiagnostics(data) {
   const criticalCount = [gatewayOk, feishuDirectOk, telegramOk].filter(Boolean).length;
 
   diagnosticsSummaryEl.textContent = gatewayOk && feishuDirectOk && telegramOk
-    ? '核心链路基本正常'
-    : `发现 ${3 - criticalCount} 项需要关注`;
+    ? 'Core path is mostly healthy'
+    : `Found ${3 - criticalCount} items needing attention`;
   diagnosticsSummaryEl.className = `mt-3 text-2xl font-semibold ${gatewayOk && feishuDirectOk && telegramOk ? 'text-emerald-300' : 'text-amber-300'}`;
   diagnosticsUpdatedEl.textContent = data.collectedAt
-    ? '自检于 ' + new Date(data.collectedAt).toLocaleString()
-    : '自检完成';
+    ? 'Diagnosed at ' + new Date(data.collectedAt).toLocaleString()
+    : 'Diagnostics completed';
 
   diagnosticsCardsEl.innerHTML = [
-    renderDiagnosticCard('Gateway', gatewayOk ? 'Running' : 'Stopped', gatewayOk ? `${(data.gateway.processes || []).length} 个进程` : '未检测到 Gateway 进程', diagnosticTone(gatewayOk)),
-    renderDiagnosticCard('飞书 API 直连', feishuDirectOk ? 'OK' : 'Failed', feishuDirectOk ? `Bot ${data.feishuDirect?.botName || data.feishuDirect?.botOpenId || '已验证'}` : (data.feishuDirect?.error || '直连失败'), diagnosticTone(feishuDirectOk)),
-    renderDiagnosticCard('飞书 Gateway 探针', feishuGatewayOk ? 'OK' : 'Failed', feishuGatewayOk ? 'OpenClaw 通道探针通过' : (feishuProbe.error || data.channels?.detail?.feishu?.reason || '探针失败'), diagnosticTone(feishuGatewayOk, feishuDirectOk && !feishuGatewayOk)),
-    renderDiagnosticCard('Telegram 探针', telegramOk ? 'OK' : 'Failed', telegramOk ? 'Telegram bot 探针通过' : (telegramProbe.error || data.channels?.detail?.telegram?.reason || '探针失败'), diagnosticTone(telegramOk)),
+    renderDiagnosticCard('Gateway', gatewayOk ? 'Running' : 'Stopped', gatewayOk ? `${(data.gateway.processes || []).length} processes` : 'Gateway process not detected', diagnosticTone(gatewayOk)),
+    renderDiagnosticCard('Feishu API Direct', feishuDirectOk ? 'OK' : 'Failed', feishuDirectOk ? `Bot ${data.feishuDirect?.botName || data.feishuDirect?.botOpenId || 'Verified'}` : (data.feishuDirect?.error || 'Direct check failed'), diagnosticTone(feishuDirectOk)),
+    renderDiagnosticCard('Feishu Gateway Probe', feishuGatewayOk ? 'OK' : 'Failed', feishuGatewayOk ? 'OpenClaw channel probe passed' : (feishuProbe.error || data.channels?.detail?.feishu?.reason || 'Probe failed'), diagnosticTone(feishuGatewayOk, feishuDirectOk && !feishuGatewayOk)),
+    renderDiagnosticCard('Telegram Probe', telegramOk ? 'OK' : 'Failed', telegramOk ? 'Telegram bot probe passed' : (telegramProbe.error || data.channels?.detail?.telegram?.reason || 'Probe failed'), diagnosticTone(telegramOk)),
   ].join('');
 
   const levels = {
@@ -951,16 +951,16 @@ async function loadDiagnostics() {
     const data = await response.json();
     renderDiagnostics(data);
   } catch (error) {
-    diagnosticsSummaryEl.textContent = '诊断读取失败';
+    diagnosticsSummaryEl.textContent = 'Diagnostics read failed';
     diagnosticsSummaryEl.className = 'mt-3 text-2xl font-semibold text-rose-300';
-    diagnosticsUpdatedEl.textContent = '无法连接后端诊断接口。';
+    diagnosticsUpdatedEl.textContent = 'Cannot reach backend diagnostics API.';
   }
 }
 
 async function runDiagnosticsProbe() {
   diagnosticsProbeBtn.disabled = true;
   postUpdateProbeBtn.disabled = true;
-  diagnosticsProbeBtn.textContent = '自检中...';
+  diagnosticsProbeBtn.textContent = 'Diagnosing...';
   try {
     const response = await authFetch('/api/diagnostics/probe', { method: 'POST' });
     const data = await response.json();
@@ -968,22 +968,22 @@ async function runDiagnosticsProbe() {
     loadAudit();
     loadTimeline();
   } catch (error) {
-    diagnosticsSummaryEl.textContent = '自检失败';
+    diagnosticsSummaryEl.textContent = 'Diagnostics failed';
     diagnosticsSummaryEl.className = 'mt-3 text-2xl font-semibold text-rose-300';
-    diagnosticsUpdatedEl.textContent = '诊断接口执行失败。';
+    diagnosticsUpdatedEl.textContent = 'Diagnostics API execution failed.';
   } finally {
     diagnosticsProbeBtn.disabled = false;
     postUpdateProbeBtn.disabled = false;
-    diagnosticsProbeBtn.textContent = '立即自检';
+    diagnosticsProbeBtn.textContent = 'Run Diagnostics';
   }
 }
 
 async function verifyChannel(channel) {
-  const label = channel === 'feishu' ? '飞书' : 'Telegram';
-  if (!window.confirm(`确认向${label}发送一条测试消息？`)) return;
+  const label = channel === 'feishu' ? 'Feishu' : 'Telegram';
+  if (!window.confirm(`Confirm sending a test message to ${label}?`)) return;
 
   channelVerifyButtons.forEach((button) => { button.disabled = true; });
-  channelVerifyMessageEl.textContent = `正在执行${label}真实验证...`;
+  channelVerifyMessageEl.textContent = `Running ${label} real verification...`;
   try {
     const response = await authFetch('/api/channels/verify', {
       method: 'POST',
@@ -991,14 +991,14 @@ async function verifyChannel(channel) {
       body: JSON.stringify({ channel, confirm: true }),
     });
     const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.message || '验证失败。');
-      channelVerifyMessageEl.textContent = `${label}测试消息已发送。${data.received ? 'Gateway 最近活动正常。' : '但 Gateway 最近活动仍未确认，请观察回复是否到达。'}`;
+    if (!response.ok || !data.success) throw new Error(data.message || 'Verification failed.');
+      channelVerifyMessageEl.textContent = `${label} test message sent. ${data.received ? 'Gateway recent activity looks healthy.' : 'Gateway recent activity is still unconfirmed; please check whether the reply arrives.'}`;
       loadChannels();
       loadDiagnostics();
     loadTimeline();
     loadAudit();
   } catch (error) {
-    channelVerifyMessageEl.textContent = `${label}真实验证失败：${error.message}`;
+    channelVerifyMessageEl.textContent = `${label} real verification failed: ${error.message}`;
   } finally {
     channelVerifyButtons.forEach((button) => { button.disabled = false; });
   }
@@ -1010,7 +1010,7 @@ async function loadTimeline() {
     const data = await response.json();
     const events = data.events || [];
     if (!events.length) {
-      timelineListEl.innerHTML = '<p class="text-sm text-zinc-500">暂无事件。</p>';
+      timelineListEl.innerHTML = '<p class="text-sm text-zinc-500">No events.</p>';
     } else {
       const tone = {
         ok: 'bg-emerald-500',
@@ -1033,9 +1033,9 @@ async function loadTimeline() {
         </div>`;
       }).join('');
     }
-    timelineUpdatedEl.textContent = '更新于 ' + new Date().toLocaleTimeString();
+    timelineUpdatedEl.textContent = 'Updated at ' + new Date().toLocaleTimeString();
   } catch (error) {
-    timelineListEl.innerHTML = '<p class="text-sm text-zinc-500">读取时间线失败。</p>';
+    timelineListEl.innerHTML = '<p class="text-sm text-zinc-500">Failed to read timeline.</p>';
   }
 }
 
@@ -1062,24 +1062,24 @@ async function loadErrors() {
           `</div>`;
       }).join('');
     }
-    errorsUpdatedEl.textContent = '更新于 ' + new Date().toLocaleTimeString();
+    errorsUpdatedEl.textContent = 'Updated at ' + new Date().toLocaleTimeString();
   } catch (error) {
     errorsEmptyEl.classList.add('hidden');
-    errorsListEl.innerHTML = '<p class="text-sm text-zinc-500">读取错误日志失败。</p>';
+    errorsListEl.innerHTML = '<p class="text-sm text-zinc-500">Failed to read error logs.</p>';
   }
 }
 
 let lastErrorsData = [];
 function copyErrors() {
-  if (!lastErrorsData || lastErrorsData.length === 0) { alert('暂无错误日志可复制'); return; }
+  if (!lastErrorsData || lastErrorsData.length === 0) { alert('No error logs to copy'); return; }
   const text = lastErrorsData.map(err => {
     const ts = err.timestamp ? new Date(err.timestamp).toLocaleString() : '-';
     return `[${ts}] [${err.source || '?'}] ${err.message}`;
   }).join('\n');
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.querySelector('button[onclick="copyErrors()"]');
-    if (btn) { const orig = btn.textContent; btn.textContent = '已复制'; setTimeout(() => btn.textContent = orig, 1500); }
-  }).catch(() => alert('复制失败'));
+    if (btn) { const orig = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = orig, 1500); }
+  }).catch(() => alert('Copy failed'));
 }
 
 async function loadAudit() {
@@ -1089,7 +1089,7 @@ async function loadAudit() {
     const entries = data.entries || [];
 
     if (!entries.length) {
-      auditListEl.innerHTML = '<p class="text-zinc-500">暂无操作记录。</p>';
+      auditListEl.innerHTML = '<p class="text-zinc-500">No operation records.</p>';
     } else {
       auditListEl.innerHTML = entries.slice(0, 8).map((entry) => {
         const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '-';
@@ -1100,14 +1100,14 @@ async function loadAudit() {
           <span class="text-zinc-500">${ts}</span>
           <span class="font-medium text-zinc-200">${action}</span>
           <span class="text-zinc-500">${ip}</span>
-          <span class="${okClass}">${entry.success ? '成功' : '失败'}</span>
+          <span class="${okClass}">${entry.success ? 'Success' : 'Failed'}</span>
         </div>`;
       }).join('');
     }
 
-    auditUpdatedEl.textContent = '更新于 ' + new Date().toLocaleTimeString();
+    auditUpdatedEl.textContent = 'Updated at ' + new Date().toLocaleTimeString();
   } catch (error) {
-    auditListEl.innerHTML = '<p class="text-zinc-500">读取操作审计失败。</p>';
+    auditListEl.innerHTML = '<p class="text-zinc-500">Failed to read operation audit.</p>';
   }
 }
 
@@ -1116,7 +1116,7 @@ async function handleControlClick(event) {
 
   isControlRequestActive = true;
   setControlButtonsDisabled(true, action);
-  controlMessageEl.textContent = `正在执行 ${actionLabels[action]} 操作，请稍候。`;
+  controlMessageEl.textContent = `Running  ${actionLabels[action]}; please wait.`;
 
   try {
     const response = await authFetch('/api/control', {
@@ -1126,13 +1126,13 @@ async function handleControlClick(event) {
     });
     const data = await response.json();
 
-    controlMessageEl.textContent = data.message || `${actionLabels[action]} 指令已发送。`;
+    controlMessageEl.textContent = data.message || `${actionLabels[action]} command sent.`;
 
     if (!response.ok || !data.success) {
-      controlMessageEl.textContent = data.detail || data.message || `${actionLabels[action]} 指令执行失败。`;
+      controlMessageEl.textContent = data.detail || data.message || `${actionLabels[action]} command failed.`;
     }
   } catch (error) {
-    controlMessageEl.textContent = '无法连接后端服务，控制指令发送失败。';
+    controlMessageEl.textContent = 'Cannot reach backend service; control command failed.';
   } finally {
     await loadGatewayStatus({ updateMessage: false });
     await loadChannels();
@@ -1169,13 +1169,13 @@ async function loadMetrics() {
     if (data.version) {
       if (data.version.local) {
         localVersionEl.textContent = data.version.local;
-        localMessageEl.textContent = '本地版本检查完成。';
+        localMessageEl.textContent = 'Local version check completed.';
       }
       if (data.version.latest) {
         latestVersionEl.textContent = data.version.latest;
         latestMessageEl.textContent = data.version.publishedAt
-          ? '发布时间：' + new Date(data.version.publishedAt).toLocaleString()
-          : `版本源：${compactVersionSource(data.version.source)}`;
+          ? 'Published at: ' + new Date(data.version.publishedAt).toLocaleString()
+          : `Version source: ${compactVersionSource(data.version.source)}`;
       }
       if (data.version.updateAvailable && data.version.releaseUrl) {
         versionUpdateBar.classList.remove('hidden');
@@ -1202,7 +1202,7 @@ async function loadMetrics() {
       diskBarEl.style.width = pct + '%';
       diskBarEl.className = 'h-full rounded-full transition-all ' +
         (pct > 90 ? 'bg-rose-500' : pct > 75 ? 'bg-amber-500' : 'bg-emerald-500');
-      diskUpdatedAtEl.textContent = '更新于 ' + new Date().toLocaleTimeString();
+      diskUpdatedAtEl.textContent = 'Updated at ' + new Date().toLocaleTimeString();
     }
 
     // Memory
@@ -1227,7 +1227,7 @@ async function loadMetrics() {
       memoryBarEl.style.width = data.memory.usedPercent + '%';
       memoryBarEl.className = 'h-full rounded-full transition-all ' +
         (data.memory.usedPercent > 90 ? 'bg-rose-500' : data.memory.usedPercent > 75 ? 'bg-amber-500' : 'bg-sky-500');
-      memoryUpdatedAtEl.textContent = '更新于 ' + new Date().toLocaleTimeString();
+      memoryUpdatedAtEl.textContent = 'Updated at ' + new Date().toLocaleTimeString();
 
       // Process list
       const procListEl = document.getElementById('memory-processes-list');
@@ -1248,7 +1248,7 @@ async function loadMetrics() {
           </div>`
         }).join('');
       } else {
-        procListEl.innerHTML = '<div class="px-4 py-3 text-zinc-600">无可用数据</div>';
+        procListEl.innerHTML = '<div class="px-4 py-3 text-zinc-600">No data available</div>';
       }
     }
   } catch (error) {
@@ -1257,12 +1257,12 @@ async function loadMetrics() {
 }
 
 async function doUpdate() {
-  if (!window.confirm('确认现在更新 OpenClaw？更新期间 Gateway 会短暂停止并自动重启。')) {
+  if (!window.confirm('Update OpenClaw now? Gateway will stop briefly and restart automatically.')) {
     return;
   }
 
   updateBtnEl.disabled = true;
-  updateBtnEl.textContent = '更新中...';
+  updateBtnEl.textContent = 'Updating...';
   isUpdateDetailsExpanded = true;
   try {
     const response = await authFetch('/api/update', {
@@ -1274,17 +1274,17 @@ async function doUpdate() {
 
     if (!response.ok || !data.success) {
       updateBtnEl.disabled = false;
-      updateBtnEl.textContent = '更新系统';
-      alert(data.message || '更新任务启动失败。');
+      updateBtnEl.textContent = 'Update System';
+      alert(data.message || 'Failed to start update job.');
       return;
     }
 
     renderUpdateJob(data.job);
     startUpdatePolling();
   } catch (error) {
-    alert('更新请求失败：' + error.message);
+    alert('Update request failed: ' + error.message);
     updateBtnEl.disabled = false;
-    updateBtnEl.textContent = '更新系统';
+    updateBtnEl.textContent = 'Update System';
   }
 }
 
@@ -1309,8 +1309,8 @@ function renderRealtimeSnapshot(snapshot) {
   if (snapshot.channels) {
     renderChannels(snapshot.channels);
     channelsUpdatedAtEl.textContent = snapshot.collectedAt
-      ? `实时更新于 ${new Date(snapshot.collectedAt).toLocaleTimeString()}`
-      : `实时更新于 ${new Date().toLocaleTimeString()}`;
+      ? `Realtime updated at ${new Date(snapshot.collectedAt).toLocaleTimeString()}`
+      : `Realtime updated at ${new Date().toLocaleTimeString()}`;
   }
   if (snapshot.update && snapshot.update.running) {
     startUpdatePolling();
@@ -1332,9 +1332,9 @@ function connectRealtime() {
     try {
       const payload = JSON.parse(event.data);
       if (payload.type === 'snapshot') renderRealtimeSnapshot(payload.data);
-      if (payload.type === 'error') showApiError('实时状态推送异常', payload.message);
+      if (payload.type === 'error') showApiError('Realtime status push error', payload.message);
     } catch (error) {
-      showApiError('实时状态解析失败', error.message);
+      showApiError('Realtime status parse failed', error.message);
     }
   });
 
@@ -1370,11 +1370,11 @@ async function boot() {
     } else if (status.local) {
       await localLogin();
     } else {
-      showLogin('请使用访问口令登录管理看板。');
+      showLogin('Please sign in with the dashboard access token.');
       return;
     }
   } catch {
-    showLogin('无法连接后端服务。');
+    showLogin('Cannot reach backend service.');
     return;
   }
 
