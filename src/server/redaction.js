@@ -18,7 +18,15 @@ function redactSensitiveText (value) {
   return REDACTION_PATTERNS.reduce((text, rule) => text.replace(rule.pattern, rule.replacement), String(value ?? ''));
 }
 
+function redactForExport (value) {
+  if (typeof value === 'string') return redactSensitiveText(value);
+  if (Array.isArray(value)) return value.map((item) => redactForExport(item));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactForExport(item)]));
+}
+
 module.exports = {
   REDACTION_PATTERNS,
+  redactForExport,
   redactSensitiveText
 };

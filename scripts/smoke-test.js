@@ -109,7 +109,7 @@ async function main () {
     fail('install.sh should not print the dashboard token value.');
   }
 
-  for (const route of ['/api/status', '/api/metrics', '/api/diagnostics', '/api/update/preflight', '/api/config/health', '/api/setup/status', '/api/health/summary', '/api/report.md']) {
+  for (const route of ['/api/status', '/api/metrics', '/api/diagnostics', '/api/update/preflight', '/api/config/health', '/api/setup/status', '/api/health/summary', '/api/report.md', '/api/support-bundle.tgz']) {
     if (!apiSources.includes(`'${route}'`) && !apiSources.includes(`"${route}"`)) fail(`Expected API route missing: ${route}`);
   }
 

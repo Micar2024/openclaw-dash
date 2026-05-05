@@ -6,7 +6,7 @@ A lightweight local diagnostic toolkit for the OpenClaw community. Open the dash
 
 ## 使用场景
 
-- **「我的 OpenClaw 出问题了，帮我看一下」** — 打开看板，一键导出脱敏诊断报告，贴到社区求助，不用描述版本/配置/报错
+- **「我的 OpenClaw 出问题了，帮我看一下」** — 打开看板，一键导出脱敏诊断报告或求助包，贴到社区求助，不用描述版本/配置/报错
 - **升级前先体检** — 运行更新预检，确认磁盘空间、CLI 兼容性、通道在线状态，防止升级翻车
 - **日常健康巡检** — 看一眼健康评分，确认 Gateway 运行时长、飞书/Telegram 是否在线、有没有积压错误
 - **自检配置** — 只读查看通道启用状态、allowlist、blockStreaming 等配置健康度
@@ -26,7 +26,8 @@ A lightweight local diagnostic toolkit for the OpenClaw community. Open the dash
 - High-resolution long screenshot export with automatic masking for common private identifiers.
 - First-run wizard for OpenClaw CLI, Gateway, log paths, config readability, token, LaunchAgent, and access mode.
 - Health score and daily summary across Gateway, channels, version, disk, and recent errors.
-- Markdown report export for diagnostics, version, channel, resource, and redacted error summaries.
+- Partial Markdown report export for diagnostics, version, channel, resource, and redacted error summaries.
+- Support bundle export (`.tar.gz`) with report, environment, metrics, diagnostics, compatibility, config health, and redacted errors.
 
 ![Realtime monitoring flow](docs/images/realtime-flow.svg)
 
@@ -91,7 +92,7 @@ bash scripts/install-macos.sh
 
 （一行命令安装已包含此步骤，无需单独执行。）
 
-**遇到问题了？** 打开看板 → 点击「导出报告」→ 把 Markdown 报告贴到社区。报告已自动脱敏，包含版本、Gateway 状态、通道健康、系统资源、近期错误和诊断建议。
+**遇到问题了？** 打开看板 → 点击「导出报告」或「导出求助包」→ 把脱敏结果贴到社区。报告和求助包已自动脱敏，包含版本、Gateway 状态、通道健康、系统资源、近期错误和诊断建议。
 
 ## 诊断原则
 
@@ -103,7 +104,7 @@ OpenClaw Dash 的主线不是替代 OpenClaw，也不是做重型监控平台，
 - **第二层：OpenClaw 基础 CLI** — `openclaw --version`、`openclaw doctor` 等用于补充版本和兼容性。
 - **第三层：OpenClaw JSON/探针能力** — 通道 probe、模型运行态等增强信息。失败时不会阻止报告生成。
 
-因此即使 Gateway 已经挂掉，Dashboard 也应该能导出半份有用报告：进程不在、最后日志时间、近期错误、系统状态、只读配置健康和版本线索。
+因此即使 Gateway 已经挂掉，Dashboard 也应该能导出半份有用报告：进程不在、最后日志时间、近期错误、系统状态、只读配置健康和版本线索。Markdown 报告采用分段容错策略，单个数据源失败不会阻止整份报告生成。
 
 ## Configuration
 

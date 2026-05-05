@@ -4,6 +4,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const WebSocket = require('ws');
+const zlib = require('zlib');
 
 function writeFile (filePath, content, mode) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -43,15 +44,16 @@ function request (server, pathname, options = {}) {
       method: options.method || 'GET',
       headers: options.headers || {}
     }, (res) => {
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk) => { body += chunk; });
+      const chunks = [];
+      res.on('data', (chunk) => { chunks.push(chunk); });
       res.on('end', () => {
+        const raw = Buffer.concat(chunks);
+        const body = raw.toString('utf8');
         let json = null;
         try {
           json = body ? JSON.parse(body) : null;
         } catch {}
-        resolve({ status: res.statusCode, body, json });
+        resolve({ status: res.statusCode, body, json, raw });
       });
     });
     req.on('error', reject);
@@ -60,7 +62,33 @@ function request (server, pathname, options = {}) {
   });
 }
 
+function parseTarFileNames (buffer) {
+  const names = [];
+  let offset = 0;
+  while (offset + 512 <= buffer.length) {
+    const header = buffer.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const name = header.subarray(0, 100).toString('utf8').replace(/\0.*$/, '');
+    const sizeText = header.subarray(124, 136).toString('ascii').replace(/\0.*$/, '').trim();
+    const size = parseInt(sizeText, 8) || 0;
+    if (name) names.push(name);
+    offset += 512 + Math.ceil(size / 512) * 512;
+  }
+  return names;
+}
+
 async function main () {
+  const { buildMarkdownReport } = require('../src/server/reports');
+  const partialReport = await buildMarkdownReport({
+    buildMetrics: async () => { throw new Error('metrics unavailable'); },
+    buildDiagnostics: async () => ({ recommendations: [{ level: 'info', title: 'partial-ok', detail: 'diagnostics survived' }] }),
+    buildHealthSummary: async () => { throw new Error('health unavailable'); },
+    readRecentErrorEntriesWithMeta: async () => ({ errors: [] })
+  });
+  assert.match(partialReport, /健康摘要采集失败/);
+  assert.match(partialReport, /Gateway 指标采集失败/);
+  assert.match(partialReport, /partial-ok/);
+
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-dash-test-'));
   process.env.HOME = tempHome;
   process.env.DASHBOARD_HOST = '127.0.0.1';
@@ -152,7 +180,23 @@ echo "{}"
     assert.match(report.body, /OpenClaw Dash 诊断报告/);
     assert.match(report.body, /Gateway/);
     assert.match(report.body, /脱敏状态/);
+    assert.match(report.body, /容错策略/);
     assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|123456789|ABCdefghijklmnopqrstuvwxyz|638d64ce/);
+
+    const bundle = await request(server, '/api/support-bundle.tgz', { headers });
+    assert.strictEqual(bundle.status, 200);
+    const bundleNames = parseTarFileNames(zlib.gunzipSync(bundle.raw));
+    assert.deepStrictEqual(bundleNames.sort(), [
+      'compatibility.json',
+      'config-health.json',
+      'diagnostics.json',
+      'environment.json',
+      'errors.json',
+      'health.json',
+      'manifest.json',
+      'metrics.json',
+      'report.md'
+    ].sort());
 
     const snapshot = await waitForRealtimeSnapshot(server, 'endpoint-mock-token');
     assert.strictEqual(snapshot.channels.feishu, 'online');

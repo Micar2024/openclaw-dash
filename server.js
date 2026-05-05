@@ -23,7 +23,7 @@ const {
   readTail
 } = require('./src/server/runtime');
 const { attachRealtimeServer } = require('./src/server/realtime');
-const { buildMarkdownReport } = require('./src/server/reports');
+const { buildMarkdownReport, buildSupportBundle } = require('./src/server/reports');
 const { buildTimeline } = require('./src/server/timeline');
 const { createAuthService } = require('./src/server/auth-service');
 const { createChannelService } = require('./src/server/channel-service');
@@ -372,6 +372,16 @@ registerLogRoutes(app, {
 
 registerReportRoutes(app, {
   buildMarkdownReport: () => buildMarkdownReport({
+    buildCompatibilityReport,
+    buildConfigHealth,
+    buildDiagnostics,
+    buildHealthSummary,
+    buildMetrics,
+    readRecentErrorEntriesWithMeta
+  }),
+  buildSupportBundle: () => buildSupportBundle({
+    buildCompatibilityReport,
+    buildConfigHealth,
     buildDiagnostics,
     buildHealthSummary,
     buildMetrics,
