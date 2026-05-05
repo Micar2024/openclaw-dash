@@ -24,22 +24,18 @@ const {
   SESSION_COOKIE,
   SESSION_MAX_AGE_MS,
   TOKEN_PATH,
-  UPDATE_JOB_PATH,
-  UPDATE_OUTPUT_TAIL_CHARS,
   WATCHDOG_INTERVAL_MS
 } = require('./src/server/config');
 const {
   ensureParentDir,
-  getDiskInfo,
-  getProcessResourceInfo,
-  parseDateMs,
   readJsonFile,
   readTail
 } = require('./src/server/runtime');
-const { getTopMemoryProcesses } = require('./src/server/processes');
 const { attachRealtimeServer } = require('./src/server/realtime');
 const { buildMarkdownReport } = require('./src/server/reports');
 const { buildTimeline } = require('./src/server/timeline');
+const { createMetricsService } = require('./src/server/metrics-service');
+const { createUpdateService } = require('./src/server/update-service');
 const {
   buildVersionSourcesHealth,
   getLatestReleaseInfo,
@@ -75,7 +71,6 @@ const channelAlertState = {
   feishu: { initialized: false, offlineSince: null, alerted: false },
   telegram: { initialized: false, offlineSince: null, alerted: false }
 };
-let updateJob = loadPersistedUpdateJob();
 
 app.use(cors());
 app.use(express.json());
@@ -207,62 +202,6 @@ function appendAudit (req, action, success, detail = {}) {
     fs.appendFile(AUDIT_LOG_PATH, `${JSON.stringify(entry)}\n`, () => {});
   } catch (error) {
     console.error('[Audit] 写入失败:', error.message);
-  }
-}
-
-function createDefaultUpdateJob () {
-  return {
-    id: null,
-    running: false,
-    status: 'idle',
-    startedAt: null,
-    finishedAt: null,
-    steps: [],
-    message: '暂无更新任务。',
-    error: null,
-    postUpdateDiagnostics: null
-  };
-}
-
-function loadPersistedUpdateJob () {
-  const saved = readJsonFile(UPDATE_JOB_PATH);
-  if (!saved || typeof saved !== 'object') return createDefaultUpdateJob();
-
-  const job = { ...createDefaultUpdateJob(), ...saved, steps: Array.isArray(saved.steps) ? saved.steps : [] };
-  if (job.running) {
-    job.running = false;
-    job.status = 'error';
-    job.finishedAt = new Date().toISOString();
-    job.message = '看板服务重启，上一轮更新状态未能确认。';
-    job.postUpdateDiagnostics = null;
-    job.steps = [...job.steps, {
-      name: '看板服务重启',
-      status: 'warning',
-      detail: '更新任务运行期间 dashboard 进程重启，无法确认该任务是否完整结束。请手动运行升级后复检。',
-      timestamp: job.finishedAt
-    }];
-  }
-
-  const diagnosticsAt = parseDateMs(job.postUpdateDiagnostics?.collectedAt);
-  const finishedAt = parseDateMs(job.finishedAt);
-  if (job.postUpdateDiagnostics && (!diagnosticsAt || (finishedAt && diagnosticsAt < finishedAt))) {
-    job.postUpdateDiagnostics = null;
-    job.steps = [...job.steps, {
-      name: '复检结果已失效',
-      status: 'warning',
-      detail: '持久化的升级后复检时间早于任务结束时间，已忽略旧结果。请重新运行升级后复检。',
-      timestamp: new Date().toISOString()
-    }];
-  }
-  return job;
-}
-
-function persistUpdateJob () {
-  try {
-    ensureParentDir(UPDATE_JOB_PATH);
-    fs.writeFileSync(UPDATE_JOB_PATH, `${JSON.stringify(updateJob, null, 2)}\n`, { mode: 0o600 });
-  } catch (error) {
-    console.error('[UpdateJob] 状态持久化失败:', error.message);
   }
 }
 
@@ -731,131 +670,6 @@ async function runChannelWatchdogCheck () {
   }
 }
 
-function sanitizeOutput (text) {
-  return String(text || '').slice(-UPDATE_OUTPUT_TAIL_CHARS);
-}
-
-function resetUpdateJob () {
-  updateJob = {
-    id: `update-${Date.now()}`,
-    running: true,
-    status: 'running',
-    startedAt: new Date().toISOString(),
-    finishedAt: null,
-    steps: [],
-    message: '更新任务已开始。',
-    error: null,
-    postUpdateDiagnostics: null
-  };
-  persistUpdateJob();
-  return updateJob;
-}
-
-function getUpdateJob () {
-  return updateJob;
-}
-
-function addUpdateStep (name, status, detail = '') {
-  updateJob.steps.push({
-    name,
-    status,
-    detail: sanitizeOutput(detail),
-    timestamp: new Date().toISOString()
-  });
-  persistUpdateJob();
-}
-
-function finishUpdateJob (status, message, error = null) {
-  updateJob.running = false;
-  updateJob.status = status;
-  updateJob.message = message;
-  updateJob.error = error ? String(error).slice(0, 1200) : null;
-  updateJob.finishedAt = new Date().toISOString();
-  persistUpdateJob();
-}
-
-function execOpenClawUpdate () {
-  return new Promise((resolve, reject) => {
-    execFile(OPENCLAW_BIN, ['update', '--yes', '--json', '--no-restart'], {
-      env: { ...process.env, PATH: DASHBOARD_PATH },
-      timeout: 300000
-    }, (error, stdout, stderr) => {
-      const output = `${stdout || ''}${stderr || ''}`;
-      if (error && !stdout.trim()) {
-        reject(new Error((stderr || error.message).trim()));
-        return;
-      }
-
-      try {
-        resolve({ success: true, output, data: JSON.parse(stdout.trim()) });
-      } catch {
-        resolve({ success: true, output, data: { message: output.trim() || 'openclaw update 已执行。' } });
-      }
-    });
-  });
-}
-
-async function runUpdateJob (req, shouldRestartGateway) {
-  try {
-    addUpdateStep('停止 Gateway', 'running');
-    if (shouldRestartGateway) {
-      await runGatewayControl('stop');
-      addUpdateStep('停止 Gateway', 'success', 'Gateway 已停止。');
-    } else {
-      addUpdateStep('停止 Gateway', 'skipped', 'Gateway 原本未运行，跳过停止步骤。');
-    }
-
-    addUpdateStep('更新 OpenClaw', 'running');
-    const updateResult = await execOpenClawUpdate();
-    addUpdateStep('更新 OpenClaw', 'success', updateResult.output || updateResult.data?.message || '更新命令执行完成。');
-
-    addUpdateStep('运行 doctor', 'running');
-    try {
-      const doctorResult = await new Promise((resolve) => {
-        execFile(OPENCLAW_BIN, ['doctor'], { env: { ...process.env, PATH: DASHBOARD_PATH }, timeout: 60000 }, (error, stdout, stderr) => {
-          resolve({ ok: !error, output: `${stdout || ''}${stderr || error?.message || ''}` });
-        });
-      });
-      addUpdateStep('运行 doctor', doctorResult.ok ? 'success' : 'warning', doctorResult.output);
-    } catch (error) {
-      addUpdateStep('运行 doctor', 'warning', error.message);
-    }
-
-    addUpdateStep('重启 Gateway', 'running');
-    if (shouldRestartGateway) {
-      await runGatewayControl('start');
-      addUpdateStep('重启 Gateway', 'success', 'Gateway 已恢复运行。');
-    } else {
-      addUpdateStep('重启 Gateway', 'skipped', 'Gateway 更新前未运行，保持停止状态。');
-    }
-
-    addUpdateStep('升级后复检', 'running');
-    try {
-      const diagnostics = await buildDiagnostics();
-      updateJob.postUpdateDiagnostics = {
-        collectedAt: diagnostics.collectedAt,
-        gatewayRunning: diagnostics.gateway.isRunning,
-        feishuDirectOk: diagnostics.feishuDirect?.ok,
-        feishuProbeOk: diagnostics.openclawProbe?.channels?.feishu?.probe?.ok,
-        telegramProbeOk: diagnostics.openclawProbe?.channels?.telegram?.probe?.ok,
-        recommendations: diagnostics.recommendations
-      };
-      persistUpdateJob();
-      const hasWarning = diagnostics.recommendations?.some((item) => item.level === 'warning' || item.level === 'critical');
-      addUpdateStep('升级后复检', hasWarning ? 'warning' : 'success', diagnostics.recommendations?.map((item) => `${item.title}: ${item.detail}`).join('\n') || '复检完成。');
-    } catch (error) {
-      addUpdateStep('升级后复检', 'warning', error.message);
-    }
-
-    finishUpdateJob('success', 'OpenClaw 更新流程已完成。');
-    appendAudit(req, 'update', true, { jobId: updateJob.id, restartedGateway: shouldRestartGateway });
-  } catch (error) {
-    addUpdateStep('更新失败', 'error', error.message);
-    finishUpdateJob('error', 'OpenClaw 更新流程失败。', error.message);
-    appendAudit(req, 'update', false, { jobId: updateJob.id, error: error.message });
-  }
-}
-
 async function readAuditEntries (limit = 30) {
   const text = await readTail(AUDIT_LOG_PATH, Math.max(limit * 3, 50));
   return text.split(/\r?\n/)
@@ -898,115 +712,6 @@ async function readRecentErrorEntriesWithMeta (maxLines = 1000, maxResults = 10)
     .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
     .slice(0, maxResults);
   return { errors, mutedCount, activeRules: muteRules };
-}
-
-async function buildMetrics () {
-  const processes = await getGatewayProcesses();
-  const gwProc = processes[0] || null;
-  const gateway = { pid: null, isRunning: processes.length > 0, uptime: null, uptimeSeconds: null, memoryRssMb: null, command: null };
-  if (gwProc) {
-    gateway.pid = gwProc.pid; gateway.command = gwProc.command;
-    try {
-      const psInfo = await getProcessResourceInfo(gwProc.pid);
-      if (psInfo) {
-        gateway.uptime = psInfo.etime; gateway.memoryRssMb = psInfo.rssKb ? Math.round(psInfo.rssKb / 1024) : null;
-        const etime = psInfo.etime;
-        if (etime) {
-          const parts = etime.split('-'); let timePart = etime; let days = 0;
-          if (parts.length > 1) { days = parseInt(parts[0], 10) || 0; timePart = parts[1]; }
-          const tparts = timePart.split(':').map(Number); let secs = days * 86400;
-          if (tparts.length === 3) secs += tparts[0] * 3600 + tparts[1] * 60 + tparts[2];
-          else if (tparts.length === 2) secs += tparts[0] * 60 + tparts[1];
-          gateway.uptimeSeconds = secs;
-        }
-      }
-    } catch (_) {}
-  }
-  const channelProbe = await getCachedOpenClawChannelProbe();
-  const [feishuHealth, telegramHealth, feishuStats, telegramStats] = await Promise.all([
-    getChannelHealth('feishu', channelProbe),
-    getChannelHealth('telegram', channelProbe),
-    getChannelMessageStats('feishu'),
-    getChannelMessageStats('telegram')
-  ]);
-  const channels = {
-    feishu: { ...feishuHealth, stats: feishuStats },
-    telegram: { ...telegramHealth, stats: telegramStats }
-  };
-  const disk = await getDiskInfo();
-  // Memory info (macOS: accurate via vm_stat; page size 16384 on Apple Silicon)
-  const [localVersion, latestRelease, model] = await Promise.all([getLocalVersion(), getLatestReleaseInfo(), getCurrentModelInfo()]);
-  const memory = await new Promise((resolve) => {
-    execFile('vm_stat', [], { timeout: 5000 }, (err, stdout) => {
-      if (err) {
-        const totalBytes = os.totalmem();
-        const freeBytes = os.freemem();
-        resolve({ totalGb: (totalBytes / 1024 / 1024 / 1024).toFixed(1), freeGb: (freeBytes / 1024 / 1024 / 1024).toFixed(1), usedGb: ((totalBytes - freeBytes) / 1024 / 1024 / 1024).toFixed(1), usedPercent: Math.round(((totalBytes - freeBytes) / totalBytes) * 100), reclaimableGb: '0.0', source: 'freemem' });
-        return;
-      }
-      const stats = {};
-      for (const line of stdout.split('\n')) {
-        const m = line.match(/^\s*(.+?):\s*(\d+)\./);
-        if (m) stats[m[1].trim()] = parseInt(m[2], 10) || 0;
-      }
-      const pagesize = 16384;
-      const freePages = stats['Pages free'] || 0;
-      const activePages = stats['Pages active'] || 0;
-      const inactivePages = stats['Pages inactive'] || 0;
-      const speculativePages = stats['Pages speculative'] || 0;
-      const wiredPages = stats['Pages wired down'] || 0;
-      const compressedPages = stats['Pages occupied by compressor'] || 0;
-      const totalBytes = os.totalmem();
-      const trulyFreeBytes = freePages * pagesize;
-      const reclaimableBytes = (inactivePages + speculativePages) * pagesize;
-      // 已用 = Active (压缩已计入"可回收"范畴,回收时自动解压)
-      const appUsedBytes = activePages * pagesize;
-      const compressedBytes = compressedPages * pagesize;
-      resolve({
-        totalGb: (totalBytes / 1024 / 1024 / 1024).toFixed(1),
-        freeGb: (trulyFreeBytes / 1024 / 1024 / 1024).toFixed(1),
-        reclaimableGb: (reclaimableBytes / 1024 / 1024 / 1024).toFixed(1),
-        usedGb: (appUsedBytes / 1024 / 1024 / 1024).toFixed(1),
-        usedPercent: Math.round((appUsedBytes / totalBytes) * 100),
-        activeGb: (activePages * pagesize / 1024 / 1024 / 1024).toFixed(1),
-        compressedGb: (compressedBytes / 1024 / 1024 / 1024).toFixed(1),
-        wiredGb: (wiredPages * pagesize / 1024 / 1024 / 1024).toFixed(1),
-        source: 'vm_stat'
-      });
-    });
-  });
-  const memoryProcesses = await getTopMemoryProcesses();
-  const updateAvailable = Boolean(parseVersion(localVersion) && parseVersion(latestRelease.latestVersion) && isVersionGreater(latestRelease.latestVersion, localVersion));
-  return { gateway, channels, disk, memory, memoryProcesses, version: { local: localVersion, latest: latestRelease.latestVersion, updateAvailable, releaseUrl: latestRelease.releaseUrl, publishedAt: latestRelease.publishedAt, source: latestRelease.source }, model, collectedAt: new Date().toISOString() };
-}
-
-async function buildUpdatePreflight () {
-  const [gatewayProcesses, disk, localVersion, latestRelease, compatibility, diagnostics] = await Promise.all([
-    getGatewayProcesses(),
-    getDiskInfo(),
-    getLocalVersion(),
-    getLatestReleaseInfo(),
-    buildCompatibilityReport(),
-    buildDiagnostics()
-  ]);
-  disk.ok = disk.freeGb == null ? false : disk.freeGb >= 2;
-  const updateAvailable = Boolean(parseVersion(localVersion) && parseVersion(latestRelease.latestVersion) && isVersionGreater(latestRelease.latestVersion, localVersion));
-  const checks = [
-    { name: '版本差异', ok: updateAvailable, detail: updateAvailable ? `${localVersion} → ${latestRelease.latestVersion}` : '当前未检测到可用更新。' },
-    { name: '磁盘空间', ok: disk.ok, detail: disk.freeGb == null ? '无法读取磁盘空间。' : `可用 ${disk.freeGb} GB，已用 ${disk.usedPercent}%` },
-    { name: 'Gateway 状态', ok: true, detail: gatewayProcesses.length ? `当前运行中，升级会先停止再恢复。PID ${gatewayProcesses[0].pid}` : '当前未运行，升级后会保持停止状态。' },
-    { name: 'CLI 兼容性', ok: compatibility.ok, detail: `${compatibility.passed}/${compatibility.required} 项通过` },
-    { name: '飞书探针', ok: Boolean(diagnostics.openclawProbe?.channels?.feishu?.probe?.ok), detail: diagnostics.openclawProbe?.channels?.feishu?.probe?.error || 'OK' },
-    { name: 'Telegram 探针', ok: Boolean(diagnostics.openclawProbe?.channels?.telegram?.probe?.ok), detail: diagnostics.openclawProbe?.channels?.telegram?.probe?.error || 'OK' }
-  ];
-  return {
-    ok: checks.every((check) => check.ok || check.name === 'Gateway 状态'),
-    localVersion,
-    latestVersion: latestRelease.latestVersion,
-    updateAvailable,
-    checks,
-    collectedAt: new Date().toISOString()
-  };
 }
 
 function fileCheck (name, filePath, options = {}) {
@@ -1102,6 +807,30 @@ async function buildHealthSummary () {
   return { score, level, summary, checks, collectedAt: new Date().toISOString() };
 }
 
+const { buildMetrics } = createMetricsService({
+  getCachedOpenClawChannelProbe,
+  getChannelHealth,
+  getChannelMessageStats,
+  getCurrentModelInfo,
+  getGatewayProcesses,
+  getLatestReleaseInfo,
+  getLocalVersion,
+  isVersionGreater,
+  parseVersion
+});
+
+const updateService = createUpdateService({
+  appendAudit,
+  buildCompatibilityReport,
+  buildDiagnostics,
+  getGatewayProcesses,
+  getLatestReleaseInfo,
+  getLocalVersion,
+  isVersionGreater,
+  parseVersion,
+  runGatewayControl
+});
+
 registerAuthRoutes(app, {
   appendAudit,
   clearSessionCookie,
@@ -1143,11 +872,11 @@ registerDiagnosticsRoutes(app, {
 registerUpdateRoutes(app, {
   appendAudit,
   assertOpenClawAvailable,
-  buildUpdatePreflight,
+  buildUpdatePreflight: updateService.buildUpdatePreflight,
   checkGatewayStatus,
-  getUpdateJob,
-  resetUpdateJob,
-  runUpdateJob
+  getUpdateJob: updateService.getUpdateJob,
+  resetUpdateJob: updateService.resetUpdateJob,
+  runUpdateJob: updateService.runUpdateJob
 });
 
 registerMetricsRoutes(app, { buildMetrics });
@@ -1162,7 +891,7 @@ registerLogRoutes(app, {
   buildTimeline: () => buildTimeline({
     checkChannelsStatus,
     checkGatewayStatus,
-    getUpdateSteps: () => updateJob.steps || [],
+    getUpdateSteps: () => updateService.getUpdateJob().steps || [],
     readAuditEntries,
     readRecentErrorEntries
   }),
@@ -1194,10 +923,10 @@ async function collectRealtimeSnapshot () {
     },
     channels,
     update: {
-      running: updateJob.running,
-      status: updateJob.status,
-      message: updateJob.message,
-      finishedAt: updateJob.finishedAt
+      running: updateService.getUpdateJob().running,
+      status: updateService.getUpdateJob().status,
+      message: updateService.getUpdateJob().message,
+      finishedAt: updateService.getUpdateJob().finishedAt
     },
     collectedAt: new Date().toISOString()
   };
