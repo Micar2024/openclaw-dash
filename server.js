@@ -212,11 +212,11 @@ async function buildSetupStatus () {
   const remoteMode = !['127.0.0.1', 'localhost', '::1'].includes(HOST);
   const checks = [
     { name: 'OpenClaw CLI', ok: cliCheck.ok, detail: cliCheck.ok ? cliCheck.output : (cliCheck.error || '未检测到 OpenClaw CLI。') },
-    { name: 'Gateway 状态', ok: gatewayRunning, detail: gatewayRunning ? 'Gateway 运行中。' : 'Gateway 未运行；请从 Gateway Control 启动。' },
+    { name: 'Gateway 状态', ok: gatewayRunning, detail: gatewayRunning ? 'Gateway 运行中。' : 'Gateway 未运行；请从 Gateway 控制启动。' },
     fileCheck('Gateway 日志路径', LOG_PATH),
     fileCheck('错误日志路径', ERR_LOG_PATH, { optional: true }),
     fileCheck('OpenClaw 配置文件', OPENCLAW_CONFIG_PATH),
-    fileCheck('Dashboard Access Token', TOKEN_PATH),
+    fileCheck('Dashboard 访问令牌', TOKEN_PATH),
     fileCheck('macOS LaunchAgent', launchAgentPath, { optional: true }),
     {
       name: '访问模式',
@@ -255,7 +255,7 @@ async function buildHealthSummary () {
   const channelItems = Array.isArray(metrics.channelItems) && metrics.channelItems.length ? metrics.channelItems : Object.entries(metrics.channels || {}).map(([id, value]) => ({ id, ...value }));
   const channelPenalty = channelItems.length ? Math.max(5, Math.floor(30 / channelItems.length)) : 0;
   for (const channel of channelItems) {
-    addCheck(`${channel.label || channel.id} Channel`, channel.status === 'online', channel.reason || channel.status, channelPenalty);
+    addCheck(`${channel.label || channel.id} 通道`, channel.status === 'online', channel.reason || channel.status, channelPenalty);
   }
   addCheck('磁盘空间', Number(metrics.disk.usedPercent || 0) < 90, `已用 ${metrics.disk.usedPercent ?? '-'}%`, Number(metrics.disk.usedPercent || 0) > 75 ? 10 : 5);
   addCheck('版本状态', !metrics.version.updateAvailable, metrics.version.updateAvailable ? `${metrics.version.local} → ${metrics.version.latest}` : '当前版本未检测到更新。', 5);
@@ -297,33 +297,33 @@ async function buildTroubleshootingGuide () {
     steps.push({
       level: 'critical',
       title: '先恢复 Gateway 进程',
-      detail: 'Dashboard 仍可导出报告。接下来点击 Gateway Control 中的「启动」；如果失败，请查看近期错误日志并运行 `openclaw doctor`。'
+      detail: 'Dashboard 仍可导出报告。接下来点击 Gateway 控制里的「启动」；如果失败，请查看近期错误日志并运行 `openclaw doctor`。'
     });
   } else if (!officialDashboard.reachable) {
     steps.push({
       level: 'warning',
-      title: 'Gateway 运行中，但 Official Dashboard 不可达',
-      detail: `检查 Official Dashboard URL（${officialDashboard.url}）、端口（${process.env.OPENCLAW_GATEWAY_PORT || '18789'}）、gateway.controlUi.basePath 或 Official Dashboard 认证配置。`
+      title: 'Gateway 运行中，但官方 Dashboard 不可达',
+      detail: `检查官方 Dashboard URL（${officialDashboard.url}）、端口（${process.env.OPENCLAW_GATEWAY_PORT || '18789'}）、gateway.controlUi.basePath 或 Dashboard 认证配置。`
     });
   } else if (!officialDashboard.auth?.configured) {
     steps.push({
       level: 'info',
-      title: 'Official Dashboard 可达，但未检测到显式认证配置',
+      title: '官方 Dashboard 可达，但未检测到显式认证配置',
       detail: '如果官方 UI 显示 unauthorized / 1008，请运行 `openclaw doctor --generate-gateway-token` 或检查 gateway.auth.token/password。'
     });
   } else {
     steps.push({
       level: 'ok',
-      title: 'Official Dashboard 可作为操作界面',
-      detail: 'OpenClaw Dash 负责 diagnostics 和 report export。日常聊天、官方设置和 Gateway 原生操作请使用 Official Dashboard。'
+      title: '官方 Dashboard 可作为操作界面',
+      detail: 'OpenClaw Dash 负责诊断和报告导出。日常聊天、官方设置和 Gateway 原生操作请使用官方 Dashboard。'
     });
   }
 
   if (offlineChannels.length) {
     steps.push({
       level: 'warning',
-      title: '处理离线 Channels',
-      detail: `离线 channels：${offlineChannels.map((channel) => channel.label || channel.id).join(', ')}。请先查看 confidence 标签；支持 direct verify 的 channel 可发送端到端测试消息。`
+      title: '处理离线通道',
+      detail: `离线通道：${offlineChannels.map((channel) => channel.label || channel.id).join(', ')}。请先查看置信标签；支持直连验证的通道可发送端到端测试消息。`
     });
   }
 
@@ -331,7 +331,7 @@ async function buildTroubleshootingGuide () {
     steps.push({
       level: 'info',
       title: '更新前运行预检',
-      detail: `检测到新版本 ${metrics.version.latest || '未知版本'}。请先运行 update preflight，然后确认磁盘、CLI 兼容性、Gateway 状态和 channel probe 后再执行更新。`
+      detail: `检测到新版本 ${metrics.version.latest || '未知版本'}。请先运行更新预检，然后确认磁盘、CLI 兼容性、Gateway 状态和 channel probe 后再执行更新。`
     });
   }
 
@@ -339,7 +339,7 @@ async function buildTroubleshootingGuide () {
     steps.push({
       level: 'warning',
       title: '求助时附带错误摘要',
-      detail: `发现 ${errors.errors.length} 条非静音错误。Bundle 已自动脱敏，可安全粘贴到社区求助。`
+      detail: `发现 ${errors.errors.length} 条非静音错误。支持包已自动脱敏，可安全粘贴到社区求助。`
     });
   }
 
@@ -347,7 +347,7 @@ async function buildTroubleshootingGuide () {
     steps.push({
       level: 'ok',
       title: '系统稳定，Dashboard 作为应急工具备用',
-      detail: '无需全天候盯着。发现异常时请先导出 report，再决定是否打开 Official Dashboard。'
+      detail: '无需全天候盯着。发现异常时请先导出报告，再决定是否打开官方 Dashboard。'
     });
   }
 

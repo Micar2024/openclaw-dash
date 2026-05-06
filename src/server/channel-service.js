@@ -63,11 +63,11 @@ function createChannelService (deps) {
 
   function verificationMeta (source, channel, detail) {
     const labels = {
-      direct: 'Direct verify',
+      direct: '直连验证',
       probe: 'CLI probe',
-      log: 'Log signal',
-      config: 'Config only',
-      none: 'No signal'
+      log: '日志信号',
+      config: '仅配置',
+      none: '无信号'
     };
     const confidence = {
       direct: 'high',
@@ -135,8 +135,8 @@ function createChannelService (deps) {
       return '最新错误日志晚于最新健康信号。';
     }
 
-    if (lastSignalLine && status === 'online') return '最新 healthy signal 晚于最新 error signal。';
-    return '近期没有足够的 healthy signal 证明该 channel 在线。';
+    if (lastSignalLine && status === 'online') return '最新健康信号晚于最新错误信号。';
+    return '近期没有足够的健康信号证明该通道在线。';
   }
 
   function maxProbeTimestamp (...values) {
@@ -176,7 +176,7 @@ function createChannelService (deps) {
 
     const label = getChannelLabel(channel);
     const onlineReason = probeOk ? 'probe.ok' : connected ? 'connected' : 'running';
-    const verificationDetail = status === 'online' ? `OpenClaw CLI 返回 ${onlineReason}。` : 'OpenClaw CLI 未确认 channel 在线。';
+    const verificationDetail = status === 'online' ? `OpenClaw CLI 返回 ${onlineReason}。` : 'OpenClaw CLI 未确认通道在线。';
 
     return {
       id: channel,
@@ -190,7 +190,7 @@ function createChannelService (deps) {
       verification: verificationMeta('probe', channel, verificationDetail),
       reason: status === 'online'
         ? `OpenClaw CLI probe 确认 ${label} ${onlineReason}。`
-        : (configured ? (lastError || 'OpenClaw CLI probe 未确认 channel 在线。') : 'OpenClaw CLI 报告 channel 未配置。')
+        : (configured ? (lastError || 'OpenClaw CLI probe 未确认通道在线。') : 'OpenClaw CLI 报告通道未配置。')
     };
   }
 
@@ -230,11 +230,11 @@ function createChannelService (deps) {
         'direct',
         channel,
         verified.received
-          ? '最近一次 direct verify 已发送测试消息，并确认 Gateway 有活动。'
-          : '最近一次 direct verify 已发送测试消息，但 Gateway 活动尚未确认。'
+          ? '最近一次直连验证已发送测试消息，并确认 Gateway 有活动。'
+          : '最近一次直连验证已发送测试消息，但 Gateway 活动尚未确认。'
       ),
       reason: verified.received
-        ? 'Direct verify 确认测试消息已发送，Gateway 活动正常。'
+        ? '直连验证确认测试消息已发送，Gateway 活动正常。'
         : health.reason
     };
   }
@@ -251,8 +251,8 @@ function createChannelService (deps) {
         lastSignalAt: null,
         lastErrorAt: null,
         lastError: null,
-        verification: verificationMeta('config', channel, '该 channel 已在配置中禁用。'),
-        reason: '该 channel 已在配置中禁用。'
+        verification: verificationMeta('config', channel, '该通道已在配置中禁用。'),
+        reason: '该通道已在配置中禁用。'
       };
     }
 
@@ -294,7 +294,7 @@ function createChannelService (deps) {
       lastSignalAt,
       lastErrorAt,
       lastError: lastErrorLine ? lastErrorLine.slice(0, 500) : null,
-      verification: verificationMeta(lastSignalLine ? 'log' : 'none', channel, lastSignalLine ? 'Gateway 日志中发现近期 healthy signal。' : '没有 log 或 probe signal 能证明该 channel 在线。'),
+      verification: verificationMeta(lastSignalLine ? 'log' : 'none', channel, lastSignalLine ? 'Gateway 日志中发现近期健康信号。' : '没有日志或 probe 信号能证明该通道在线。'),
       reason: explainChannelStatus(channel, status, lastSignalLine, lastErrorLine)
     };
     return applyRealVerification(channel, mergeChannelHealth(logHealth, deriveChannelHealthFromProbe(channel, probe)));
@@ -423,7 +423,7 @@ function createChannelService (deps) {
     let result;
     if (channel === 'feishu') result = await verifyFeishuChannel();
     else if (channel === 'telegram') result = await verifyTelegramChannel();
-    else throw new Error('Only feishu or telegram is supported.');
+    else throw new Error('目前仅支持 feishu 或 telegram。');
     realVerifyState[channel] = {
       sent: Boolean(result.sent),
       received: Boolean(result.received),

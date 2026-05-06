@@ -264,7 +264,7 @@ function buildRecommendations ({ gatewayRunning, channels, openclawProbe, feishu
   }
 
   if (!recommendations.length) {
-    recommendations.push({ level: 'ok', title: '核心状态正常', detail: 'Gateway、channels 和 model checks 未发现新的高优先级问题。如果体验仍然异常，请导出 report 向社区求助。' });
+    recommendations.push({ level: 'ok', title: '核心状态正常', detail: 'Gateway、通道和模型检查未发现新的高优先级问题。如果体验仍然异常，请导出报告向社区求助。' });
   }
 
   return recommendations;

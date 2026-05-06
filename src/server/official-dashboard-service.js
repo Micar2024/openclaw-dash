@@ -64,8 +64,8 @@ function createOfficialDashboardService () {
           configured: authConfigured
         },
         recommendation: reachable
-          ? (authConfigured ? 'Official Dashboard 可达。如果仍无法进入，请先在浏览器中检查 Gateway token/密码。' : 'Official Dashboard 可达，但未检测到显式认证配置。如果看到 1008/unauthorized，请运行 `openclaw doctor --generate-gateway-token`。')
-          : 'Official Dashboard 无响应。如果 Gateway 运行中，请检查端口、basePath 或 Dashboard 认证配置。',
+          ? (authConfigured ? '官方 Dashboard 可达。如果仍无法进入，请先在浏览器中检查 Gateway token/密码。' : '官方 Dashboard 可达，但未检测到显式认证配置。如果看到 1008/unauthorized，请运行 `openclaw doctor --generate-gateway-token`。')
+          : '官方 Dashboard 无响应。如果 Gateway 运行中，请检查端口、basePath 或 Dashboard 认证配置。',
         collectedAt: new Date().toISOString()
       };
     } catch (error) {
@@ -82,7 +82,7 @@ function createOfficialDashboardService () {
           configured: Boolean(config.auth.tokenPresent || config.auth.passwordPresent || config.auth.allowTailscale || config.auth.trustedProxy || config.auth.mode === 'none')
         },
         error: error.code || error.message,
-        recommendation: 'Official Dashboard 无响应。请先确认 Gateway 运行中，然后检查端口 18789 或自定义 OPENCLAW_GATEWAY_PORT。',
+        recommendation: '官方 Dashboard 无响应。请先确认 Gateway 运行中，然后检查端口 18789 或自定义 OPENCLAW_GATEWAY_PORT。',
         collectedAt: new Date().toISOString()
       };
     }

@@ -30,16 +30,16 @@ async function buildMarkdownReport (deps) {
   const troubleshooting = troubleshootingResult.data || {};
   const errors = errorsResult.data || { errors: [] };
   const lines = [];
-  lines.push('# OpenClaw Dash Report');
+  lines.push('# OpenClaw Dash 诊断报告');
   lines.push('');
   lines.push(`生成时间：${new Date().toLocaleString()}`);
-  lines.push('Redaction：常见 token、open_id、IP、邮箱、超长数字标识和本地路径会自动遮蔽。');
-  lines.push('Fault tolerance：单个数据源失败不会阻断报告生成，失败信息会标记在对应章节中。');
+  lines.push('脱敏说明：常见 token、open_id、IP、邮箱、超长数字标识和本地路径会自动遮蔽。');
+  lines.push('容错说明：单个数据源失败不会阻断报告生成，失败信息会标记在对应章节中。');
   lines.push('');
   lines.push('## 概览');
   lines.push('');
   if (healthResult.ok) {
-    lines.push(`- Health score：${health.score}/100`);
+    lines.push(`- 健康分：${health.score}/100`);
     lines.push(`- 结论：${markdownEscape(health.summary)}`);
   } else {
     lines.push(`- 健康概览收集失败：${markdownEscape(healthResult.error)}`);
@@ -56,7 +56,7 @@ async function buildMarkdownReport (deps) {
     lines.push(`- Gateway 指标收集失败：${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## Official Dashboard');
+  lines.push('## 官方 Dashboard');
   lines.push('');
   if (officialResult.ok) {
     lines.push(`- URL: ${markdownEscape(official.url || '-')}`);
@@ -65,7 +65,7 @@ async function buildMarkdownReport (deps) {
     lines.push(`- 认证：${official.auth?.configured ? '已配置' : '未找到显式配置'}（模式：${markdownEscape(official.auth?.mode || '-')}）`);
     lines.push(`- 建议：${markdownEscape(official.recommendation || '-')}`);
   } else {
-    lines.push(`- Official Dashboard 状态收集失败：${markdownEscape(officialResult.error)}`);
+    lines.push(`- 官方 Dashboard 状态收集失败：${markdownEscape(officialResult.error)}`);
   }
   lines.push('');
   lines.push('## 故障排查路径');
@@ -89,10 +89,10 @@ async function buildMarkdownReport (deps) {
     lines.push(`- 版本信息收集失败：${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## Channels');
+  lines.push('## 通道');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push('| Channel | Status | Confidence | Last Activity | Today | Last Hour | Errors |');
+    lines.push('| 通道 | 状态 | 置信来源 | 最近活动 | 今日 | 近 1 小时 | 错误 |');
     lines.push('| --- | --- | --- | --- | ---: | ---: | ---: |');
     const channelItems = Array.isArray(metrics.channelItems) && metrics.channelItems.length ? metrics.channelItems : Object.entries(metrics.channels || {}).map(([id, value]) => ({ id, ...value }));
     for (const channel of channelItems) {
@@ -216,7 +216,7 @@ async function buildSupportBundle (deps) {
 
   for (const result of results) {
     if (result.name === 'report.md') {
-      files.push({ name: result.name, content: result.ok ? result.data : `# OpenClaw Dash Report\n\n报告生成失败：${markdownEscape(result.error)}\n` });
+      files.push({ name: result.name, content: result.ok ? result.data : `# OpenClaw Dash 诊断报告\n\n报告生成失败：${markdownEscape(result.error)}\n` });
       continue;
     }
     files.push({

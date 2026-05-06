@@ -7,7 +7,7 @@ function registerGatewayRoutes (app, deps) {
   app.post('/api/control', async (req, res) => {
     const { action } = req.body || {};
     if (!deps.controlActions.has(action)) {
-      return res.status(400).json({ success: false, message: 'Invalid action. Only start, stop, and restart are supported.' });
+      return res.status(400).json({ success: false, message: '无效操作，仅支持启动、停止和重启。' });
     }
 
     try {
@@ -16,7 +16,7 @@ function registerGatewayRoutes (app, deps) {
       res.json({ success: true, action, ...result });
     } catch (error) {
       deps.appendAudit(req, `gateway.${action}`, false, { error: error.message });
-      res.status(500).json({ success: false, action, message: `Failed to run gateway ${action} command.`, detail: error.message });
+      res.status(500).json({ success: false, action, message: `Gateway ${action} 命令执行失败。`, detail: error.message });
     }
   });
 }

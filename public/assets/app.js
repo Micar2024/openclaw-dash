@@ -54,7 +54,7 @@ async function localLogin() {
     refreshRuntimeState();
     connectRealtime();
   } catch (error) {
-    loginMessageEl.textContent = error.message || '本地登录失败，请使用 access token。';
+    loginMessageEl.textContent = error.message || '本地登录失败，请使用访问令牌。';
     loginScreenEl.classList.remove('hidden');
   } finally {
     localLoginBtn.disabled = false;
@@ -65,7 +65,7 @@ async function localLogin() {
 async function tokenLogin() {
   const token = tokenInputEl.value.trim();
   if (!token) {
-    loginMessageEl.textContent = '请输入 access token。';
+    loginMessageEl.textContent = '请输入访问令牌。';
     return;
   }
 
@@ -399,7 +399,7 @@ async function exportSupportBundle() {
   exportBundleBtn.textContent = '导出中...';
   try {
     const response = await authFetch('/api/support-bundle.tgz');
-    if (!response.ok) throw new Error('Bundle API 返回错误。');
+    if (!response.ok) throw new Error('支持包 API 返回错误。');
     const bundle = await response.blob();
     const url = URL.createObjectURL(bundle);
     const link = document.createElement('a');
@@ -408,7 +408,7 @@ async function exportSupportBundle() {
     link.click();
     URL.revokeObjectURL(url);
   } catch (error) {
-    showApiError('Bundle 导出失败', error.message);
+    showApiError('支持包导出失败', error.message);
   } finally {
     exportBundleBtn.disabled = false;
     exportBundleBtn.textContent = oldText;
@@ -422,7 +422,7 @@ async function loadLocalVersion() {
     const data = await response.json();
 
     localVersionEl.textContent = data.version || '未安装';
-    localMessageEl.textContent = data.message || 'Local version 已刷新。';
+    localMessageEl.textContent = data.message || '本地版本已刷新。';
   } catch (error) {
     localVersionEl.textContent = '读取失败';
     localMessageEl.textContent = '无法连接后端服务，请确认 Node.js 服务正在运行。';
@@ -436,7 +436,7 @@ async function loadLatestVersion() {
 
     if (!response.ok || !data.success) {
       latestVersionEl.textContent = '获取失败';
-      latestMessageEl.textContent = data.message || '无法获取 latest release。';
+      latestMessageEl.textContent = data.message || '无法获取最新版本。';
       return;
     }
 
@@ -461,7 +461,7 @@ function normalizeChannelItems(source) {
 function renderChannels(channels) {
   const items = normalizeChannelItems(channels);
   if (!items.length) {
-    channelsGridEl.innerHTML = '<article class="rounded-lg border border-white/10 bg-white/[0.04] p-6 text-sm text-zinc-500">未找到已配置的 channel。</article>';
+    channelsGridEl.innerHTML = '<article class="rounded-lg border border-white/10 bg-white/[0.04] p-6 text-sm text-zinc-500">未找到已配置的通道。</article>';
     return;
   }
 
@@ -471,7 +471,7 @@ function renderChannels(channels) {
     const statusClass = isOnline ? 'text-emerald-500' : 'text-rose-500';
     const dotClass = isOnline ? 'bg-emerald-500' : 'bg-rose-500';
     const stats = channel.stats || {};
-    const lastSeen = channel.lastSeenAt ? 'Last activity: ' + new Date(channel.lastSeenAt).toLocaleString() : 'No activity timestamp';
+    const lastSeen = channel.lastSeenAt ? '最近活动：' + new Date(channel.lastSeenAt).toLocaleString() : '暂无活动时间';
     const verification = channel.verification || {};
     const confidenceClass = verification.confidence === 'high'
       ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
@@ -479,12 +479,12 @@ function renderChannels(channels) {
         ? 'border-sky-400/20 bg-sky-400/10 text-sky-300'
         : 'border-amber-400/20 bg-amber-400/10 text-amber-200';
     const verifyBadge = channel.supportsVerify
-      ? '<span class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">Direct verify</span>'
-      : '<span class="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-500">Log / probe</span>';
-    const trustBadge = `<span class="rounded-md border px-2 py-1 text-[11px] ${confidenceClass}">${escapeHtml(verification.label || 'Unknown')}</span>`;
+      ? '<span class="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-300">支持直连验证</span>'
+      : '<span class="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] text-zinc-500">日志 / probe</span>';
+    const trustBadge = `<span class="rounded-md border px-2 py-1 text-[11px] ${confidenceClass}">${escapeHtml(verification.label || '未知来源')}</span>`;
     return `<article class="flex h-full min-h-[330px] flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
       <div class="flex items-center justify-between gap-4">
-        <p class="min-w-0 truncate text-sm font-medium text-zinc-400">${escapeHtml(channel.label || channel.id || 'Unknown channel')}</p>
+        <p class="min-w-0 truncate text-sm font-medium text-zinc-400">${escapeHtml(channel.label || channel.id || '未知通道')}</p>
         <span class="h-3 w-3 shrink-0 rounded-full ${dotClass}"></span>
       </div>
       <div class="mt-4 flex min-h-8 flex-wrap items-start gap-2">
@@ -554,7 +554,7 @@ function renderUpdateJob(job) {
   updateProgressMessage.textContent = isRunning
     ? (job.message || '更新任务正在运行。')
     : job.status === 'idle'
-      ? '无更新任务。点击“更新”后，这里会显示实时步骤。'
+      ? '无更新任务。点击“更新系统”后，这里会显示实时步骤。'
       : `${job.message || '更新任务已完成。'}${lastStep ? ` 最后一步：${lastStep.name} · ${updateStatusLabels[lastStep.status] || lastStep.status}` : ''}`;
   updateStatusPill.textContent = updateStatusLabels[job.status] || job.status || '空闲';
   updateStatusPill.className = 'rounded-md border px-3 py-1 text-xs ' + (
@@ -596,7 +596,7 @@ function renderUpdateJob(job) {
   updateDetailsToggle.textContent = isUpdateDetailsExpanded ? '隐藏详情' : '显示详情';
 
   updateBtnEl.disabled = isRunning;
-  updateBtnEl.textContent = isRunning ? '更新中...' : '更新';
+  updateBtnEl.textContent = isRunning ? '更新中...' : '更新系统';
   if (job.status === 'success' || job.postUpdateDiagnostics) {
     postUpdateProbeBtn.classList.remove('hidden');
   } else {
@@ -650,7 +650,7 @@ async function loadSetupStatus() {
   try {
     const response = await authFetch('/api/setup/status');
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || '读取 setup 状态失败。');
+    if (!response.ok) throw new Error(data.error || '读取首次运行状态失败。');
 
     setupSummaryEl.textContent = data.ok ? '启动环境就绪' : `${data.passed}/${data.required} 项检查通过`;
     setupSummaryEl.className = `mt-3 text-2xl font-semibold ${data.ok ? 'text-emerald-300' : 'text-amber-300'}`;
@@ -681,9 +681,9 @@ async function loadAssurance() {
       !preflight.ok && preflight.updateAvailable,
       (versionSources.sources || []).every((source) => !source.ok),
     ].filter(Boolean).length;
-    assuranceSummaryEl.textContent = attention ? `发现 ${attention} 项需要关注` : 'Assurance 正常';
+    assuranceSummaryEl.textContent = attention ? `发现 ${attention} 项需要关注` : '系统保障正常';
     assuranceSummaryEl.className = `mt-3 text-2xl font-semibold ${attention ? 'text-amber-300' : 'text-emerald-300'}`;
-    assuranceUpdatedEl.textContent = 'Checked at ' + new Date().toLocaleString();
+    assuranceUpdatedEl.textContent = '检查于 ' + new Date().toLocaleString();
 
     renderStatusPill(compatibilityPillEl, compatibility.ok, `${compatibility.passed}/${compatibility.required}`);
     compatibilityListEl.innerHTML = renderMiniRows((compatibility.checks || []).slice(0, 6).map((check) => ({
@@ -718,7 +718,7 @@ async function loadAssurance() {
       </label>
     `).join('');
   } catch (error) {
-    assuranceSummaryEl.textContent = 'Assurance 检查失败';
+    assuranceSummaryEl.textContent = '系统保障检查失败';
     assuranceSummaryEl.className = 'mt-3 text-2xl font-semibold text-rose-300';
     assuranceUpdatedEl.textContent = error.message;
   }
@@ -726,9 +726,9 @@ async function loadAssurance() {
 
 function renderOfficialDashboard(data) {
   const reachable = Boolean(data.reachable);
-  officialDashboardSummaryEl.textContent = reachable ? 'Official Dashboard 可达' : 'Official Dashboard 无响应';
+  officialDashboardSummaryEl.textContent = reachable ? '官方 Dashboard 可达' : '官方 Dashboard 无响应';
   officialDashboardSummaryEl.className = `mt-3 text-2xl font-semibold ${reachable ? 'text-emerald-300' : 'text-amber-300'}`;
-  officialDashboardDetailEl.textContent = data.recommendation || 'Official Dashboard 状态已刷新。';
+  officialDashboardDetailEl.textContent = data.recommendation || '官方 Dashboard 状态已刷新。';
   officialDashboardLinkEl.href = data.url || 'http://127.0.0.1:18789/';
   officialDashboardLinkEl.className = 'self-start rounded-md px-4 py-2 text-sm font-semibold text-white transition ' + (
     reachable ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-zinc-700 hover:bg-zinc-600'
@@ -750,7 +750,7 @@ function renderOfficialDashboard(data) {
 function renderTroubleshooting(data) {
   const steps = data.steps || [];
   const warningCount = steps.filter((step) => ['critical', 'warning'].includes(step.level)).length;
-  troubleshootingSummaryEl.textContent = warningCount ? `${warningCount} 项优先检查` : '路径正常';
+  troubleshootingSummaryEl.textContent = warningCount ? `${warningCount} 项优先检查` : '排查路径正常';
   troubleshootingSummaryEl.className = `mt-3 text-2xl font-semibold ${warningCount ? 'text-amber-300' : 'text-emerald-300'}`;
   const tone = {
     ok: 'border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-200',
@@ -940,7 +940,7 @@ function renderDiagnostics(data) {
   diagnosticsCardsEl.innerHTML = [
     renderDiagnosticCard('Gateway', gatewayOk ? '运行中' : '已停止', gatewayOk ? `${(data.gateway.processes || []).length} 个进程` : 'Gateway 进程未检测到', diagnosticTone(gatewayOk)),
     renderDiagnosticCard('Feishu API', feishuDirectOk ? '正常' : '失败', feishuDirectOk ? `Bot ${data.feishuDirect?.botName || data.feishuDirect?.botOpenId || '已验证'}` : (data.feishuDirect?.error || '直连检查失败'), diagnosticTone(feishuDirectOk)),
-    renderDiagnosticCard('Feishu Probe', feishuGatewayOk ? '正常' : '失败', feishuGatewayOk ? 'OpenClaw probe 通过' : (feishuProbe.error || data.channels?.detail?.feishu?.reason || 'Probe 失败'), diagnosticTone(feishuGatewayOk, feishuDirectOk && !feishuGatewayOk)),
+    renderDiagnosticCard('飞书 Gateway Probe', feishuGatewayOk ? '正常' : '失败', feishuGatewayOk ? 'OpenClaw probe 通过' : (feishuProbe.error || data.channels?.detail?.feishu?.reason || 'Probe 失败'), diagnosticTone(feishuGatewayOk, feishuDirectOk && !feishuGatewayOk)),
     renderDiagnosticCard('Telegram Probe', telegramOk ? '正常' : '失败', telegramOk ? 'Telegram bot probe 通过' : (telegramProbe.error || data.channels?.detail?.telegram?.reason || 'Probe 失败'), diagnosticTone(telegramOk)),
   ].join('');
 
@@ -996,7 +996,7 @@ async function verifyChannel(channel) {
   if (!window.confirm(`确认向 ${label} 发送一条测试消息吗？`)) return;
 
   channelVerifyButtons.forEach((button) => { button.disabled = true; });
-  channelVerifyMessageEl.textContent = `正在执行 ${label} direct verify...`;
+  channelVerifyMessageEl.textContent = `正在执行 ${label} 直连验证...`;
   try {
     const response = await authFetch('/api/channels/verify', {
       method: 'POST',
@@ -1005,13 +1005,13 @@ async function verifyChannel(channel) {
     });
     const data = await response.json();
     if (!response.ok || !data.success) throw new Error(data.message || '验证失败。');
-      channelVerifyMessageEl.textContent = `${label} 测试消息已发送。${data.received ? 'Gateway 近期活动正常。' : 'Gateway 近期活动尚未确认，请检查回复是否到达。'}`;
-      loadChannels();
-      loadDiagnostics();
+    channelVerifyMessageEl.textContent = `${label} 测试消息已发送。${data.received ? 'Gateway 近期活动正常。' : 'Gateway 近期活动尚未确认，请检查回复是否到达。'}`;
+    loadChannels();
+    loadDiagnostics();
     loadTimeline();
     loadAudit();
   } catch (error) {
-    channelVerifyMessageEl.textContent = `${label} direct verify 失败：${error.message}`;
+    channelVerifyMessageEl.textContent = `${label} 直连验证失败：${error.message}`;
   } finally {
     channelVerifyButtons.forEach((button) => { button.disabled = false; });
   }
@@ -1287,7 +1287,7 @@ async function doUpdate() {
 
     if (!response.ok || !data.success) {
       updateBtnEl.disabled = false;
-      updateBtnEl.textContent = '更新';
+      updateBtnEl.textContent = '更新系统';
       alert(data.message || '启动更新任务失败。');
       return;
     }
@@ -1297,7 +1297,7 @@ async function doUpdate() {
   } catch (error) {
     alert('更新请求失败：' + error.message);
     updateBtnEl.disabled = false;
-    updateBtnEl.textContent = '更新';
+    updateBtnEl.textContent = '更新系统';
   }
 }
 
@@ -1382,8 +1382,8 @@ async function boot() {
       hideLogin();
     } else if (status.local) {
       await localLogin();
-  } else {
-      showLogin('请使用 Dashboard access token 登录。');
+    } else {
+      showLogin('请使用 Dashboard 访问令牌登录。');
       return;
     }
   } catch {

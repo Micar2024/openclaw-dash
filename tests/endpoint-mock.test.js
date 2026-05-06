@@ -188,12 +188,12 @@ echo "{}"
 
     const report = await request(server, '/api/report.md', { headers });
     assert.strictEqual(report.status, 200);
-    assert.match(report.body, /OpenClaw Dash Report/);
+    assert.match(report.body, /OpenClaw Dash 诊断报告/);
     assert.match(report.body, /Gateway/);
-    assert.match(report.body, /Official Dashboard/);
+    assert.match(report.body, /官方 Dashboard/);
     assert.match(report.body, /故障排查路径/);
-    assert.match(report.body, /Redaction/);
-    assert.match(report.body, /Fault tolerance/);
+    assert.match(report.body, /脱敏说明/);
+    assert.match(report.body, /容错说明/);
     assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|ABCdefghijklmnopqrstuvwxyz|638d64ce/);
     assert.match(report.body, /\| Email \| online \|/);
 

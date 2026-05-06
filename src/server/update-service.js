@@ -213,11 +213,11 @@ function createUpdateService (deps) {
       detail: channel?.probe?.error || channel?.lastError || '正常'
     }));
     const checks = [
-      { id: 'version-diff', name: 'Version Diff', ok: updateAvailable, detail: updateAvailable ? `${localVersion} → ${latestRelease.latestVersion}` : '未检测到可用更新。' },
-      { id: 'disk-space', name: 'Disk Space', ok: disk.ok, detail: disk.freeGb == null ? '无法读取磁盘空间。' : `可用 ${disk.freeGb} GB，已用 ${disk.usedPercent}%` },
+      { id: 'version-diff', name: '版本差异', ok: updateAvailable, detail: updateAvailable ? `${localVersion} → ${latestRelease.latestVersion}` : '未检测到可用更新。' },
+      { id: 'disk-space', name: '磁盘空间', ok: disk.ok, detail: disk.freeGb == null ? '无法读取磁盘空间。' : `可用 ${disk.freeGb} GB，已用 ${disk.usedPercent}%` },
       { id: 'gateway-state', name: 'Gateway 状态', ok: true, detail: gatewayProcesses.length ? `当前运行中；更新会先停止再恢复。PID ${gatewayProcesses[0].pid}` : '当前已停止；更新后会保持停止状态。' },
       { id: 'cli-compatibility', name: 'CLI 兼容性', ok: compatibility.ok, detail: `${compatibility.passed}/${compatibility.required} 项检查通过` },
-      ...(probeChannels.length ? probeChannels : [{ name: 'Channel Probe', ok: false, detail: diagnostics.openclawProbe?.error || '未检测到 channel probe 结果。' }])
+      ...(probeChannels.length ? probeChannels : [{ name: '通道 Probe', ok: false, detail: diagnostics.openclawProbe?.error || '未检测到 channel probe 结果。' }])
     ];
     return {
       ok: checks.every((check) => check.ok || check.id === 'gateway-state'),

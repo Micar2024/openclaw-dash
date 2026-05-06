@@ -24,7 +24,7 @@
         </button>
 
         <div class="mt-6 border-t border-white/10 pt-6">
-          <label for="token-input" class="text-xs font-medium text-zinc-500">Access Token</label>
+          <label for="token-input" class="text-xs font-medium text-zinc-500">访问令牌</label>
           <div class="mt-2 flex gap-2">
             <input id="token-input" type="password" autocomplete="current-password" class="min-w-0 flex-1 rounded-md border border-white/10 bg-zinc-950/60 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-emerald-400/50" placeholder="输入令牌进行远程访问" />
             <button id="token-login-btn" type="button" class="rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50">
@@ -68,14 +68,14 @@
               截图
             </button>
             <button id="export-report-btn" onclick="exportMarkdownReport()" class="rounded-md border border-sky-400/20 bg-sky-400/10 px-3 py-3 text-xs font-semibold text-sky-200 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="导出 Markdown 诊断报告">
-              Report
+              报告
             </button>
-            <button id="export-bundle-btn" onclick="exportSupportBundle()" class="rounded-md border border-violet-400/20 bg-violet-400/10 px-3 py-3 text-xs font-semibold text-violet-200 transition hover:bg-violet-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="导出脱敏 Bundle">
-              Bundle
+            <button id="export-bundle-btn" onclick="exportSupportBundle()" class="rounded-md border border-violet-400/20 bg-violet-400/10 px-3 py-3 text-xs font-semibold text-violet-200 transition hover:bg-violet-400/15 disabled:cursor-not-allowed disabled:opacity-50" title="导出脱敏支持包">
+              支持包
             </button>
             <div class="rounded-md border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
               <span class="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-400"></span>
-              Control
+              状态与控制
             </div>
             <button onclick="logout()" class="rounded-md border border-white/10 bg-white/[0.04] px-3 py-3 text-xs text-zinc-500 transition hover:text-zinc-300" title="退出登录">
               退出
@@ -90,7 +90,7 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-zinc-400">Local Version</p>
+                <p class="text-sm font-medium text-zinc-400">本地版本</p>
                 <h2 id="local-version" class="mt-3 min-h-10 text-2xl font-semibold text-white">
                   加载中...
                 </h2>
@@ -103,14 +103,14 @@
               读取本地 OpenClaw 版本。
             </p>
             <button id="update-btn" onclick="doUpdate()" class="mt-auto hidden w-fit rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50">
-              更新
+              更新系统
             </button>
           </article>
 
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/20">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-zinc-400">Latest Release</p>
+                <p class="text-sm font-medium text-zinc-400">最新版本</p>
                 <h2 id="latest-version" class="mt-3 min-h-10 text-2xl font-semibold text-white">
                   加载中...
                 </h2>
@@ -134,7 +134,7 @@
         <section id="update-progress-panel" class="mt-6 hidden rounded-lg border border-amber-400/20 bg-amber-400/[0.05] p-4">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p class="text-sm font-medium text-amber-200">Update Progress</p>
+              <p class="text-sm font-medium text-amber-200">更新进度</p>
               <p id="update-progress-message" class="mt-2 text-sm text-zinc-400">等待更新任务。</p>
             </div>
             <div class="flex items-center gap-3 self-start sm:self-center">
@@ -149,7 +149,7 @@
           <div id="update-progress-details" class="mt-4">
             <div id="update-progress-list" class="space-y-2"></div>
             <button id="post-update-probe-btn" type="button" onclick="runDiagnosticsProbe()" class="mt-4 hidden rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50">
-              Post-check
+              更新后检查
             </button>
           </div>
         </section>
@@ -159,9 +159,9 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-zinc-400">Health 概览</p>
+                <p class="text-sm font-medium text-zinc-400">健康概览</p>
                 <h2 id="health-score" class="mt-3 text-5xl font-semibold text-white">--</h2>
-                <p id="health-summary" class="mt-3 text-sm leading-6 text-zinc-500">汇总 Gateway、Channels、版本、磁盘和近期错误。</p>
+                <p id="health-summary" class="mt-3 text-sm leading-6 text-zinc-500">汇总 Gateway、通道、版本、磁盘和近期错误。</p>
               </div>
               <span id="health-level" class="rounded-md border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-zinc-500">加载中</span>
             </div>
@@ -172,7 +172,7 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p class="text-sm font-medium text-zinc-400">Setup 向导</p>
+                <p class="text-sm font-medium text-zinc-400">首次运行向导</p>
                 <h2 id="setup-summary" class="mt-3 text-2xl font-semibold text-white">检查环境中</h2>
                 <p id="setup-updated" class="mt-3 text-sm leading-6 text-zinc-500">检查 OpenClaw、Gateway、日志路径、配置权限和访问模式。</p>
               </div>
@@ -188,7 +188,7 @@
         <section class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p class="text-sm font-medium text-zinc-400">Assurance Center</p>
+              <p class="text-sm font-medium text-zinc-400">系统保障</p>
               <h2 id="assurance-summary" class="mt-3 text-2xl font-semibold text-white">等待检查</h2>
               <p id="assurance-updated" class="mt-3 text-sm text-zinc-500">兼容性、更新预检、版本源、日志静音规则和只读配置健康。</p>
             </div>
@@ -206,23 +206,23 @@
             </article>
             <article class="rounded-md border border-white/10 bg-zinc-950/35 p-4">
               <div class="flex items-center justify-between gap-3">
-                <p class="text-sm font-semibold text-zinc-200">Update Preflight</p>
+                <p class="text-sm font-semibold text-zinc-200">更新预检</p>
                 <span id="preflight-pill" class="rounded-md border border-white/10 px-2 py-1 text-xs text-zinc-500">-</span>
               </div>
               <div id="preflight-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
             </article>
             <article class="rounded-md border border-white/10 bg-zinc-950/35 p-4">
-              <p class="text-sm font-semibold text-zinc-200">Version Sources</p>
+              <p class="text-sm font-semibold text-zinc-200">版本源</p>
               <div id="version-sources-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
             </article>
             <article class="rounded-md border border-white/10 bg-zinc-950/35 p-4">
-              <p class="text-sm font-semibold text-zinc-200">Config Health</p>
+              <p class="text-sm font-semibold text-zinc-200">配置健康</p>
               <div id="config-health-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
             </article>
           </div>
           <article class="mt-4 rounded-md border border-white/10 bg-zinc-950/35 p-4">
             <div class="flex items-center justify-between gap-3">
-              <p class="text-sm font-semibold text-zinc-200">Log Muting</p>
+              <p class="text-sm font-semibold text-zinc-200">日志静音规则</p>
               <span id="log-rules-pill" class="text-xs text-zinc-500">-</span>
             </div>
             <div id="log-rules-list" class="mt-3 space-y-2 text-xs text-zinc-500"></div>
@@ -234,12 +234,12 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p class="text-sm font-medium text-zinc-400">Official Dashboard</p>
+                <p class="text-sm font-medium text-zinc-400">官方 Dashboard</p>
                 <h2 id="official-dashboard-summary" class="mt-3 text-2xl font-semibold text-white">检查中</h2>
-                <p id="official-dashboard-detail" class="mt-3 text-sm leading-6 text-zinc-500">检查 Official Dashboard 是否可达，不读取或存储官方 token。</p>
+                <p id="official-dashboard-detail" class="mt-3 text-sm leading-6 text-zinc-500">检查官方 Dashboard 是否可达，不读取或存储官方 token。</p>
               </div>
               <a id="official-dashboard-link" href="http://127.0.0.1:18789/" target="_blank" rel="noopener" class="self-start rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400">
-                Open Dashboard
+                打开 Dashboard
               </a>
             </div>
             <div id="official-dashboard-facts" class="mt-5 grid gap-3 text-xs sm:grid-cols-3"></div>
@@ -248,7 +248,7 @@
           <article class="flex h-full flex-col rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-zinc-400">Troubleshooting</p>
+                <p class="text-sm font-medium text-zinc-400">故障排查</p>
                 <h2 id="troubleshooting-summary" class="mt-3 text-2xl font-semibold text-white">等待分析</h2>
               </div>
               <button type="button" onclick="loadTroubleshooting()" class="rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12]">
@@ -263,7 +263,7 @@
         <section class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p class="text-sm font-medium text-zinc-400">Runtime Model</p>
+              <p class="text-sm font-medium text-zinc-400">当前模型</p>
               <h2 id="model-current" class="mt-3 text-2xl font-semibold text-white">加载中...</h2>
               <p id="model-source" class="mt-3 text-sm text-zinc-500">读取 OpenClaw 模型配置。</p>
             </div>
@@ -293,7 +293,7 @@
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
             <div>
-              <h2 class="text-xl font-semibold text-white">Channels</h2>
+              <h2 class="text-xl font-semibold text-white">通道状态</h2>
             </div>
             <p id="channels-updated-at" class="text-sm text-zinc-500">等待刷新</p>
           </div>
@@ -305,12 +305,12 @@
         <section class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p class="text-sm font-medium text-zinc-400">Diagnostics</p>
+              <p class="text-sm font-medium text-zinc-400">健康诊断</p>
               <h2 id="diagnostics-summary" class="mt-3 text-2xl font-semibold text-white">等待诊断</h2>
-              <p id="diagnostics-updated" class="mt-3 text-sm text-zinc-500">区分配置、API、Gateway runtime 和 channel probe 问题。</p>
+              <p id="diagnostics-updated" class="mt-3 text-sm text-zinc-500">区分配置、API、Gateway 运行时和通道 probe 问题。</p>
             </div>
             <button id="diagnostics-probe-btn" type="button" onclick="runDiagnosticsProbe()" class="self-start rounded-md bg-white/[0.08] px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-50">
-              Run
+              运行诊断
             </button>
           </div>
           <div id="diagnostics-cards" class="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4"></div>
@@ -322,7 +322,7 @@
             <button type="button" onclick="verifyChannel('telegram')" class="channel-verify-button rounded-md bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50" data-channel="telegram">
               Telegram 验证
             </button>
-            <p id="channel-verify-message" class="flex min-h-9 flex-1 items-center text-sm leading-6 text-zinc-500">Direct verify 会向所选 channel 发送测试消息。</p>
+            <p id="channel-verify-message" class="flex min-h-9 flex-1 items-center text-sm leading-6 text-zinc-500">直连验证会向所选 channel 发送测试消息。</p>
           </div>
         </section>
 
@@ -330,7 +330,7 @@
         <section class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="flex items-center justify-between gap-4">
             <div>
-              <p class="text-sm font-medium text-zinc-400">Timeline</p>
+              <p class="text-sm font-medium text-zinc-400">时间线</p>
               <h2 class="mt-3 text-xl font-semibold text-white">近期事件</h2>
             </div>
             <button type="button" onclick="loadTimeline()" class="rounded-md bg-white/[0.08] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.12]">刷新</button>
@@ -345,7 +345,7 @@
         <section id="gateway-control-panel" class="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-6">
           <div class="gateway-control-layout flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div class="flex-1">
-              <p class="text-sm font-medium text-zinc-400">Gateway Control</p>
+              <p class="text-sm font-medium text-zinc-400">Gateway 控制</p>
               <div class="mt-3 flex items-center gap-3">
                 <span id="gateway-dot" class="h-3 w-3 rounded-full bg-zinc-600"></span>
                 <h2 id="gateway-status" class="text-2xl font-semibold text-white">加载中...</h2>
@@ -391,7 +391,7 @@
         <!-- 错误日志 -->
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold text-white">Error Logs</h2>
+            <h2 class="text-xl font-semibold text-white">错误日志</h2>
             <div class="flex gap-3">
               <button onclick="copyErrors()" class="text-xs text-zinc-500 transition hover:text-zinc-300">复制</button>
               <button onclick="loadErrors()" class="text-xs text-zinc-500 transition hover:text-zinc-300">刷新</button>
@@ -407,7 +407,7 @@
         <!-- 操作审计 -->
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold text-white">Audit Log</h2>
+            <h2 class="text-xl font-semibold text-white">操作审计</h2>
             <button onclick="loadAudit()" class="text-xs text-zinc-500 transition hover:text-zinc-300">刷新</button>
           </div>
           <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
@@ -421,13 +421,13 @@
         <!-- 磁盘空间 -->
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold text-white">Disk</h2>
+            <h2 class="text-xl font-semibold text-white">磁盘</h2>
             <span id="disk-updated-at" class="text-sm text-zinc-500">-</span>
           </div>
           <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm font-medium text-zinc-400">Free</p>
+                <p class="text-sm font-medium text-zinc-400">可用</p>
                 <p id="disk-free" class="mt-2 text-2xl font-semibold text-white">加载中...</p>
               </div>
               <div class="text-right">
@@ -444,13 +444,13 @@
         <!-- 内存 -->
         <div class="mt-8">
           <div class="mb-4 flex items-center justify-between gap-4">
-            <h2 class="text-xl font-semibold text-white">Memory</h2>
+            <h2 class="text-xl font-semibold text-white">内存</h2>
             <span id="memory-updated-at" class="text-sm text-zinc-500">-</span>
           </div>
           <article class="rounded-lg border border-white/10 bg-white/[0.04] p-6">
             <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p class="text-sm font-medium text-zinc-400">Free</p>
+                <p class="text-sm font-medium text-zinc-400">可用</p>
                 <p id="memory-free" class="mt-2 text-2xl font-semibold text-white">加载中...</p>
               </div>
               <div class="lg:text-right">
@@ -463,15 +463,15 @@
             </div>
             <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">Total</p>
+                <p class="text-xs text-zinc-500">总量</p>
                 <p id="memory-total" class="mt-1 text-sm font-semibold text-zinc-200">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">Apps</p>
+                <p class="text-xs text-zinc-500">应用</p>
                 <p id="memory-used" class="mt-1 text-sm font-semibold text-amber-400">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">Cache</p>
+                <p class="text-xs text-zinc-500">缓存</p>
                 <p id="memory-reclaimable" class="mt-1 text-sm font-semibold text-sky-400">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
@@ -479,17 +479,17 @@
                 <p id="memory-free2" class="mt-1 text-sm font-semibold text-emerald-400">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">Wired</p>
+                <p class="text-xs text-zinc-500">系统占用</p>
                 <p id="memory-wired" class="mt-1 text-sm font-semibold text-zinc-300">-</p>
               </div>
               <div class="rounded-md border border-white/10 bg-zinc-950/40 px-4 py-3">
-                <p class="text-xs text-zinc-500">Compressed</p>
+                <p class="text-xs text-zinc-500">压缩</p>
                 <p id="memory-compressed" class="mt-1 text-sm font-semibold text-zinc-300">-</p>
               </div>
             </div>
 
             <details class="mt-5 cursor-pointer">
-              <summary class="select-none text-xs text-zinc-500 hover:text-zinc-400">Process Details</summary>
+              <summary class="select-none text-xs text-zinc-500 hover:text-zinc-400">进程详情</summary>
               <div id="memory-processes" class="mt-4 rounded-md border border-white/10 bg-zinc-950/35 p-3">
                 <div class="mb-3 grid grid-cols-[minmax(0,1fr)_220px] items-center gap-4 px-2 text-xs text-zinc-500">
                   <span>进程</span>
