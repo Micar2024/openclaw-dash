@@ -30,63 +30,63 @@ async function buildMarkdownReport (deps) {
   const troubleshooting = troubleshootingResult.data || {};
   const errors = errorsResult.data || { errors: [] };
   const lines = [];
-  lines.push('# OpenClaw Dash Diagnostic Report');
+  lines.push('# OpenClaw Dash Report');
   lines.push('');
-  lines.push(`Generated at: ${new Date().toLocaleString()}`);
-  lines.push('Redaction: common tokens, open_id values, IPs, emails, very long numeric identifiers, and local paths are masked automatically.');
-  lines.push('Fault tolerance: a failed data source does not block report generation; failures are marked in their sections.');
+  lines.push(`生成时间：${new Date().toLocaleString()}`);
+  lines.push('Redaction：常见 token、open_id、IP、邮箱、超长数字标识和本地路径会自动遮蔽。');
+  lines.push('Fault tolerance：单个数据源失败不会阻断报告生成，失败信息会标记在对应章节中。');
   lines.push('');
-  lines.push('## Summary');
+  lines.push('## 概览');
   lines.push('');
   if (healthResult.ok) {
-    lines.push(`- Health score: ${health.score}/100`);
-    lines.push(`- Conclusion: ${markdownEscape(health.summary)}`);
+    lines.push(`- Health score：${health.score}/100`);
+    lines.push(`- 结论：${markdownEscape(health.summary)}`);
   } else {
-    lines.push(`- Health summary collection failed: ${markdownEscape(healthResult.error)}`);
+    lines.push(`- 健康概览收集失败：${markdownEscape(healthResult.error)}`);
   }
   lines.push('');
   lines.push('## Gateway');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push(`- Status: ${markdownEscape(metrics.gateway?.isRunning ? 'Running' : 'Stopped')}`);
+    lines.push(`- 状态：${markdownEscape(metrics.gateway?.isRunning ? '运行中' : '已停止')}`);
     lines.push(`- ${markdownEscape(`PID: ${metrics.gateway?.pid || '-'}`)}`);
-    lines.push(`- Uptime: ${markdownEscape(metrics.gateway?.uptime || '-')}`);
-    lines.push(`- Memory: ${markdownEscape(metrics.gateway?.memoryRssMb || '-')} MB`);
+    lines.push(`- 运行时长：${markdownEscape(metrics.gateway?.uptime || '-')}`);
+    lines.push(`- 内存：${markdownEscape(metrics.gateway?.memoryRssMb || '-')} MB`);
   } else {
-    lines.push(`- Gateway metrics collection failed: ${markdownEscape(metricsResult.error)}`);
+    lines.push(`- Gateway 指标收集失败：${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## Official Control UI');
+  lines.push('## Official Dashboard');
   lines.push('');
   if (officialResult.ok) {
     lines.push(`- URL: ${markdownEscape(official.url || '-')}`);
-    lines.push(`- Reachable: ${official.reachable ? 'Yes' : 'No'}`);
+    lines.push(`- 可达：${official.reachable ? '是' : '否'}`);
     lines.push(`- HTTP: ${markdownEscape(official.httpStatus || '-')}`);
-    lines.push(`- Auth: ${official.auth?.configured ? 'Configured' : 'No explicit config found'} (mode: ${markdownEscape(official.auth?.mode || '-')})`);
-    lines.push(`- Recommendation: ${markdownEscape(official.recommendation || '-')}`);
+    lines.push(`- 认证：${official.auth?.configured ? '已配置' : '未找到显式配置'}（模式：${markdownEscape(official.auth?.mode || '-')}）`);
+    lines.push(`- 建议：${markdownEscape(official.recommendation || '-')}`);
   } else {
-    lines.push(`- Official Control UI status collection failed: ${markdownEscape(officialResult.error)}`);
+    lines.push(`- Official Dashboard 状态收集失败：${markdownEscape(officialResult.error)}`);
   }
   lines.push('');
-  lines.push('## Troubleshooting Path');
+  lines.push('## 故障排查路径');
   lines.push('');
   if (troubleshootingResult.ok) {
     for (const step of troubleshooting.steps || []) {
       lines.push(`- ${markdownEscape(step.title)}: ${markdownEscape(step.detail)}`);
     }
   } else {
-    lines.push(`- Troubleshooting path collection failed: ${markdownEscape(troubleshootingResult.error)}`);
+    lines.push(`- 故障排查路径收集失败：${markdownEscape(troubleshootingResult.error)}`);
   }
   lines.push('');
-  lines.push('## Version');
+  lines.push('## 版本');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push(`- Local version: ${markdownEscape(metrics.version?.local || '-')}`);
-    lines.push(`- Latest version: ${markdownEscape(metrics.version?.latest || '-')}`);
-    lines.push(`- Update available: ${metrics.version?.updateAvailable ? 'Yes' : 'No'}`);
-    lines.push(`- Source: ${markdownEscape(metrics.version?.source || '-')}`);
+    lines.push(`- 本地版本：${markdownEscape(metrics.version?.local || '-')}`);
+    lines.push(`- 最新版本：${markdownEscape(metrics.version?.latest || '-')}`);
+    lines.push(`- 有可用更新：${metrics.version?.updateAvailable ? '是' : '否'}`);
+    lines.push(`- 来源：${markdownEscape(metrics.version?.source || '-')}`);
   } else {
-    lines.push(`- Version collection failed: ${markdownEscape(metricsResult.error)}`);
+    lines.push(`- 版本信息收集失败：${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
   lines.push('## Channels');
@@ -99,34 +99,34 @@ async function buildMarkdownReport (deps) {
       lines.push(`| ${markdownEscape(channel.label || channel.id)} | ${markdownEscape(channel.status)} | ${markdownEscape(channel.verification?.label || '-')} | ${markdownEscape(channel.lastSeenAt || '-')} | ${channel.stats?.todayMessages ?? '-'} | ${channel.stats?.lastHourMessages ?? '-'} | ${channel.stats?.errorCount ?? '-'} |`);
     }
   } else {
-    lines.push(`- Channel collection failed: ${markdownEscape(metricsResult.error)}`);
+    lines.push(`- 通道信息收集失败：${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## System Resources');
+  lines.push('## 系统资源');
   lines.push('');
   if (metricsResult.ok) {
-    lines.push(`- Disk: Free ${markdownEscape(metrics.disk?.freeGb ?? '-')} GB, Used ${markdownEscape(metrics.disk?.usedPercent ?? '-')}%`);
-    lines.push(`- Memory: Used ${markdownEscape(metrics.memory?.usedGb ?? '-')} GB / ${markdownEscape(metrics.memory?.totalGb ?? '-')} GB (${markdownEscape(metrics.memory?.usedPercent ?? '-')}%)`);
+    lines.push(`- 磁盘：可用 ${markdownEscape(metrics.disk?.freeGb ?? '-')} GB，已用 ${markdownEscape(metrics.disk?.usedPercent ?? '-')}%`);
+    lines.push(`- 内存：已用 ${markdownEscape(metrics.memory?.usedGb ?? '-')} GB / ${markdownEscape(metrics.memory?.totalGb ?? '-')} GB（${markdownEscape(metrics.memory?.usedPercent ?? '-')}%）`);
   } else {
-    lines.push(`- System resources collection failed: ${markdownEscape(metricsResult.error)}`);
+    lines.push(`- 系统资源收集失败：${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
-  lines.push('## Recommendations');
+  lines.push('## 建议');
   lines.push('');
   if (diagnosticsResult.ok) {
     for (const item of diagnostics.recommendations || []) {
       lines.push(`- ${markdownEscape(item.title)}: ${markdownEscape(item.detail)}`);
     }
   } else {
-    lines.push(`- Recommendation collection failed: ${markdownEscape(diagnosticsResult.error)}`);
+    lines.push(`- 建议收集失败：${markdownEscape(diagnosticsResult.error)}`);
   }
   lines.push('');
-  lines.push('## Recent Errors');
+  lines.push('## 近期错误');
   lines.push('');
   if (!errorsResult.ok) {
-    lines.push(`- Error log collection failed: ${markdownEscape(errorsResult.error)}`);
+    lines.push(`- 错误日志收集失败：${markdownEscape(errorsResult.error)}`);
   } else if (!errors.errors.length) {
-    lines.push('- No unmuted errors.');
+    lines.push('- 无非静音错误。');
   } else {
     for (const entry of errors.errors) {
       lines.push(`- ${markdownEscape(entry.timestamp || '-')} · ${markdownEscape(entry.source)}: ${markdownEscape(entry.message)}`);
@@ -216,7 +216,7 @@ async function buildSupportBundle (deps) {
 
   for (const result of results) {
     if (result.name === 'report.md') {
-      files.push({ name: result.name, content: result.ok ? result.data : `# OpenClaw Dash Diagnostic Report\n\nReport generation failed: ${markdownEscape(result.error)}\n` });
+      files.push({ name: result.name, content: result.ok ? result.data : `# OpenClaw Dash Report\n\n报告生成失败：${markdownEscape(result.error)}\n` });
       continue;
     }
     files.push({

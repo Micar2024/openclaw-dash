@@ -85,8 +85,8 @@ async function main () {
     buildHealthSummary: async () => { throw new Error('health unavailable'); },
     readRecentErrorEntriesWithMeta: async () => ({ errors: [] })
   });
-  assert.match(partialReport, /Health summary collection failed/);
-  assert.match(partialReport, /Gateway metrics collection failed/);
+  assert.match(partialReport, /健康概览收集失败/);
+  assert.match(partialReport, /Gateway 指标收集失败/);
   assert.match(partialReport, /partial-ok/);
 
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'openclaw-dash-test-'));
@@ -188,10 +188,10 @@ echo "{}"
 
     const report = await request(server, '/api/report.md', { headers });
     assert.strictEqual(report.status, 200);
-    assert.match(report.body, /OpenClaw Dash Diagnostic Report/);
+    assert.match(report.body, /OpenClaw Dash Report/);
     assert.match(report.body, /Gateway/);
-    assert.match(report.body, /Official Control UI/);
-    assert.match(report.body, /Troubleshooting Path/);
+    assert.match(report.body, /Official Dashboard/);
+    assert.match(report.body, /故障排查路径/);
     assert.match(report.body, /Redaction/);
     assert.match(report.body, /Fault tolerance/);
     assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|ABCdefghijklmnopqrstuvwxyz|638d64ce/);

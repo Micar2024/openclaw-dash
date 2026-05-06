@@ -82,12 +82,12 @@ function getLocalVersionStatus () {
         resolve({
           installed: false,
           version: null,
-          message: 'openclaw was not detected, or `openclaw --version` failed.',
+          message: '未检测到 openclaw，或 `openclaw --version` 执行失败。',
           detail: stderr ? stderr.trim() : error.message
         });
         return;
       }
-      resolve({ installed: true, version: stdout.trim() || 'Unknown version', message: 'Local openclaw detected.' });
+      resolve({ installed: true, version: stdout.trim() || '未知版本', message: '已检测到本地 openclaw。' });
     });
   });
 }
@@ -177,7 +177,7 @@ async function fetchGithubVersionSource () {
     const latest = releases
       .filter((release) => !release.prerelease && parseVersion(release.tag_name))
       .sort((a, b) => compareVersions(b.tag_name, a.tag_name))[0];
-    return { name: 'GitHub Releases', ok: Boolean(latest), latestVersion: latest?.tag_name || null, status: latest ? 'ok' : 'empty', detail: latest ? latest.html_url : 'No stable release found.' };
+    return { name: 'GitHub Releases', ok: Boolean(latest), latestVersion: latest?.tag_name || null, status: latest ? 'ok' : 'empty', detail: latest ? latest.html_url : '未找到稳定发布版本。' };
   } catch (error) {
     return { name: 'GitHub Releases', ok: false, latestVersion: null, status: 'error', detail: error.response?.data?.message || error.message };
   }
@@ -199,13 +199,13 @@ function fetchDashCacheVersionSource () {
   const cached = readJsonFile(DASH_VERSION_CACHE_PATH);
   const fresh = Boolean(cached?.latestVersion && isFreshTimestamp(cached.cachedAt, DASH_VERSION_CACHE_MAX_AGE_MS));
   return {
-    name: 'Dash cache',
+    name: 'Dash 缓存',
     ok: fresh,
     latestVersion: cached?.latestVersion || null,
     status: cached?.latestVersion ? (fresh ? 'ok' : 'stale') : 'empty',
     detail: cached?.cachedAt
-      ? `Cached at ${cached.cachedAt}${fresh ? '' : ', older than 7 days and no longer trusted as a version source.'}`
-      : 'No dashboard version cache.'
+      ? `缓存时间 ${cached.cachedAt}${fresh ? '' : '，已超过 7 天，不再作为可信版本源。'}`
+      : '没有 Dashboard 版本缓存。'
   };
 }
 

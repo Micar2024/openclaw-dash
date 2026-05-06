@@ -63,11 +63,11 @@ function createChannelService (deps) {
 
   function verificationMeta (source, channel, detail) {
     const labels = {
-      direct: 'Direct verification',
-      probe: 'OpenClaw CLI probe',
-      log: 'Log inference',
-      config: 'Config state',
-      none: 'No positive signal'
+      direct: 'Direct verify',
+      probe: 'CLI probe',
+      log: 'Log signal',
+      config: 'Config only',
+      none: 'No signal'
     };
     const confidence = {
       direct: 'high',
@@ -80,7 +80,7 @@ function createChannelService (deps) {
       source,
       label: labels[source] || source,
       confidence: confidence[source] || 'low',
-      detail: detail || `${getChannelLabel(channel)} uses ${labels[source] || source} for status.`
+      detail: detail || `${getChannelLabel(channel)} 使用 ${labels[source] || source} 判断状态。`
     };
   }
 
@@ -130,13 +130,13 @@ function createChannelService (deps) {
 
   function explainChannelStatus (channel, status, lastSignalLine, lastErrorLine) {
     if (lastErrorLine && status === 'offline') {
-      if (/status code 400/i.test(lastErrorLine)) return 'A recent connection request returned 400; the channel may need post-upgrade config adaptation.';
-      if (/connect failed|unable to connect/i.test(lastErrorLine)) return 'A recent connection failure was detected.';
-      return 'The latest error log is newer than the latest healthy signal.';
+      if (/status code 400/i.test(lastErrorLine)) return '最近一次连接请求返回 400，通道可能需要适配升级后的配置。';
+      if (/connect failed|unable to connect/i.test(lastErrorLine)) return '检测到最近一次连接失败。';
+      return '最新错误日志晚于最新健康信号。';
     }
 
-    if (lastSignalLine && status === 'online') return 'The latest healthy signal is newer than the latest error signal.';
-    return 'No recent healthy signal proves this channel is online.';
+    if (lastSignalLine && status === 'online') return '最新 healthy signal 晚于最新 error signal。';
+    return '近期没有足够的 healthy signal 证明该 channel 在线。';
   }
 
   function maxProbeTimestamp (...values) {
@@ -176,7 +176,7 @@ function createChannelService (deps) {
 
     const label = getChannelLabel(channel);
     const onlineReason = probeOk ? 'probe.ok' : connected ? 'connected' : 'running';
-    const verificationDetail = status === 'online' ? `OpenClaw CLI returned ${onlineReason}.` : 'OpenClaw CLI did not confirm the channel is online.';
+    const verificationDetail = status === 'online' ? `OpenClaw CLI 返回 ${onlineReason}。` : 'OpenClaw CLI 未确认 channel 在线。';
 
     return {
       id: channel,
@@ -189,8 +189,8 @@ function createChannelService (deps) {
       lastError,
       verification: verificationMeta('probe', channel, verificationDetail),
       reason: status === 'online'
-        ? `OpenClaw CLI probe confirmed ${label} ${onlineReason}.`
-        : (configured ? (lastError || 'OpenClaw CLI probe did not confirm the channel is online.') : 'OpenClaw CLI reports the channel is not configured.')
+        ? `OpenClaw CLI probe 确认 ${label} ${onlineReason}。`
+        : (configured ? (lastError || 'OpenClaw CLI probe 未确认 channel 在线。') : 'OpenClaw CLI 报告 channel 未配置。')
     };
   }
 
@@ -230,11 +230,11 @@ function createChannelService (deps) {
         'direct',
         channel,
         verified.received
-          ? 'Recent direct verification sent a test message and confirmed Gateway activity.'
-          : 'Recent direct verification sent a test message, but Gateway activity remains unconfirmed.'
+          ? '最近一次 direct verify 已发送测试消息，并确认 Gateway 有活动。'
+          : '最近一次 direct verify 已发送测试消息，但 Gateway 活动尚未确认。'
       ),
       reason: verified.received
-        ? 'Direct verification confirmed the test message was sent and Gateway activity looks healthy.'
+        ? 'Direct verify 确认测试消息已发送，Gateway 活动正常。'
         : health.reason
     };
   }
@@ -251,8 +251,8 @@ function createChannelService (deps) {
         lastSignalAt: null,
         lastErrorAt: null,
         lastError: null,
-        verification: verificationMeta('config', channel, 'This channel is disabled in config.'),
-        reason: 'This channel is disabled in config.'
+        verification: verificationMeta('config', channel, '该 channel 已在配置中禁用。'),
+        reason: '该 channel 已在配置中禁用。'
       };
     }
 
@@ -294,7 +294,7 @@ function createChannelService (deps) {
       lastSignalAt,
       lastErrorAt,
       lastError: lastErrorLine ? lastErrorLine.slice(0, 500) : null,
-      verification: verificationMeta(lastSignalLine ? 'log' : 'none', channel, lastSignalLine ? 'Recent healthy signal found in Gateway logs.' : 'No log or probe signal proves this channel is online.'),
+      verification: verificationMeta(lastSignalLine ? 'log' : 'none', channel, lastSignalLine ? 'Gateway 日志中发现近期 healthy signal。' : '没有 log 或 probe signal 能证明该 channel 在线。'),
       reason: explainChannelStatus(channel, status, lastSignalLine, lastErrorLine)
     };
     return applyRealVerification(channel, mergeChannelHealth(logHealth, deriveChannelHealthFromProbe(channel, probe)));

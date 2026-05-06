@@ -34,7 +34,7 @@ function createGatewayService () {
   function assertOpenClawAvailable () {
     return new Promise((resolve, reject) => {
       fs.access(OPENCLAW_BIN, fs.constants.X_OK, (error) => {
-        if (error) reject(new Error(`openclaw command was not detected. Please confirm ${OPENCLAW_BIN} exists and is executable.`));
+        if (error) reject(new Error(`未检测到 openclaw 命令。请确认 ${OPENCLAW_BIN} 存在且可执行。`));
         else resolve();
       });
     });
@@ -59,24 +59,24 @@ function createGatewayService () {
     if (action === 'start') {
       await runOpenClawDaemonCommand('start');
       const started = await waitForGatewayState(true, 20000);
-      if (!started) throw new Error('OpenClaw daemon start ran, but Gateway did not become running before timeout.');
+      if (!started) throw new Error('OpenClaw daemon start 已执行，但 Gateway 未在超时时间内进入运行状态。');
       wasRunning = true;
-      return { changed: true, pids: (await getGatewayProcesses()).map((p) => p.pid), isRunning: true, message: 'Gateway started.' };
+      return { changed: true, pids: (await getGatewayProcesses()).map((p) => p.pid), isRunning: true, message: 'Gateway 已启动。' };
     }
     if (action === 'stop') {
       wasRunning = false;
       await runOpenClawDaemonCommand('stop');
       const stopped = await waitForGatewayState(false, 15000);
-      if (!stopped) throw new Error('OpenClaw daemon stop ran, but Gateway did not stop before timeout.');
-      return { changed: true, pids: [], isRunning: false, message: 'Gateway stopped.' };
+      if (!stopped) throw new Error('OpenClaw daemon stop 已执行，但 Gateway 未在超时时间内停止。');
+      return { changed: true, pids: [], isRunning: false, message: 'Gateway 已停止。' };
     }
 
     wasRunning = false;
     await runOpenClawDaemonCommand('restart');
     const restarted = await waitForGatewayState(true, 25000);
-    if (!restarted) throw new Error('OpenClaw daemon restart ran, but Gateway did not become running before timeout.');
+    if (!restarted) throw new Error('OpenClaw daemon restart 已执行，但 Gateway 未在超时时间内进入运行状态。');
     wasRunning = true;
-    return { changed: true, pids: (await getGatewayProcesses()).map((p) => p.pid), isRunning: true, message: 'Gateway restarted.' };
+    return { changed: true, pids: (await getGatewayProcesses()).map((p) => p.pid), isRunning: true, message: 'Gateway 已重启。' };
   }
 
   function runOpenClawDaemonCommand (action) {
@@ -88,7 +88,7 @@ function createGatewayService () {
     });
   }
 
-  function sendMacOSAlert (message = 'Gateway process terminated unexpectedly. Please check the dashboard.', title = 'OpenClaw Alert') {
+  function sendMacOSAlert (message = 'Gateway 进程意外终止，请检查 Dashboard。', title = 'OpenClaw 告警') {
     return new Promise((resolve) => {
       const script = `display notification ${JSON.stringify(message)} with title ${JSON.stringify(title)} sound name "Basso"`;
       execFile('osascript', ['-e', script], { timeout: 5000 }, (error) => {
