@@ -2,12 +2,6 @@
 
 A lightweight local diagnostic toolkit for the OpenClaw community. Open the dashboard, export a privacy-masked report, paste it in Discord or your support group, and others can see the facts immediately.
 
-## 简介
-
-OpenClaw Dash 是一个运行在本机的 OpenClaw Gateway 诊断面板。它用来查看 Gateway 状态、通道健康、版本更新、系统资源和近期错误，并可以导出已脱敏的诊断报告或支持包，方便社区协助排查问题。
-
-它不会替代 OpenClaw 官方控制台，也不会展示密钥内容；核心目标是把本机 OpenClaw 的运行状态整理成可读、可分享、尽量安全的诊断信息。
-
 ![OpenClaw Dash overview](docs/images/dashboard-overview.svg)
 
 ## Use Cases
