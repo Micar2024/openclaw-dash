@@ -130,12 +130,36 @@ echo "{}"
       telegram: { enabled: true, allowFrom: ['123456'] },
       email: { enabled: true, allowFrom: ['test@example.com'] }
     },
-    plugins: { entries: {} }
+    plugins: { entries: {} },
+    agents: {
+      defaults: {
+        model: {
+          primary: 'easyrouter/deepseek-v4-flash',
+          fallbacks: ['easyrouter/gemini-2.5-flash']
+        },
+        models: {
+          'easyrouter/deepseek-v4-flash': { alias: 'ER Flash' }
+        }
+      }
+    },
+    models: {
+      providers: {
+        easyrouter: {
+          models: [{
+            id: 'deepseek/deepseek-v4-flash',
+            name: 'DeepSeek V4 Flash',
+            contextWindow: 128000,
+            maxTokens: 8192,
+            reasoning: true
+          }]
+        }
+      }
+    }
   }));
   writeFile(path.join(tempHome, '.openclaw/logs/gateway.log'), [
     '2026-05-05T10:00:00 [feishu] connected',
     '2026-05-05T10:00:01 [gateway] telegram polling logs are quiet in this fixture',
-    '2026-05-05T10:00:02 agent model: mock/provider',
+    '2026-05-05T10:00:02 agent model: easyrouter/deepseek-v4-flash',
     '2026-05-05T10:00:03 error token=abc123secret path=/Users/alice/.openclaw/openclaw.json open_id=ou_mocksecret ip=192.168.1.2 chat=123456789 url=https://api.telegram.org/bot123456789:ABCdefghijklmnopqrstuvwxyz/getMe runId=638d64ce-b68a-4157-bbe3-6e2829d0888b'
   ].join('\n'));
 
@@ -209,6 +233,13 @@ echo "{}"
     const diagnostics = await request(server, '/api/diagnostics', { headers });
     assert.strictEqual(diagnostics.status, 200);
     assert.strictEqual(diagnostics.json.openclawProbe.ok, true);
+
+    const model = await request(server, '/api/model', { headers });
+    assert.strictEqual(model.status, 200);
+    assert.strictEqual(model.json.alias, 'ER Flash');
+    assert.strictEqual(model.json.contextWindow, 128000);
+    assert.strictEqual(model.json.maxTokens, 8192);
+    assert.strictEqual(model.json.reasoning, true);
 
     const setup = await request(server, '/api/setup/status', { headers });
     assert.strictEqual(setup.status, 200);

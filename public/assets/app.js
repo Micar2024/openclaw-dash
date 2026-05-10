@@ -668,6 +668,40 @@ async function loadSetupStatus() {
   }
 }
 
+async function loadCoreFilesHealth() {
+  try {
+    const response = await fetch('/api/core-files/health', { credentials: 'same-origin' });
+    if (!response.ok) {
+      return {
+        ok: true,
+        unavailable: true,
+        score: '-',
+        summary: '核心文件健康接口不可用，请重启 Dashboard 后端以加载最新版本。',
+        privacy: '',
+        checks: [{
+          name: '核心文件健康接口',
+          level: 'warning',
+          detail: `接口暂不可用，HTTP ${response.status}。`
+        }]
+      };
+    }
+    return response.json();
+  } catch (error) {
+    return {
+      ok: true,
+      unavailable: true,
+      score: '-',
+      summary: '核心文件健康接口暂不可用。',
+      privacy: '',
+      checks: [{
+        name: '核心文件健康接口',
+        level: 'warning',
+        detail: error.message
+      }]
+    };
+  }
+}
+
 async function loadAssurance() {
   assuranceSummaryEl.textContent = '检查中...';
   try {
@@ -676,7 +710,7 @@ async function loadAssurance() {
       authFetch('/api/update/preflight').then((res) => res.json()),
       authFetch('/api/version/sources').then((res) => res.json()),
       authFetch('/api/config/health').then((res) => res.json()),
-      authFetch('/api/core-files/health').then((res) => res.json()),
+      loadCoreFilesHealth(),
       authFetch('/api/log-rules').then((res) => res.json()),
     ]);
 

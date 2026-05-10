@@ -50,8 +50,19 @@ function resolveModelMetadata (config, modelId) {
   const shortId = provider ? modelId.slice(provider.length + 1) : modelId;
   const providerConfig = provider ? config.models?.providers?.[provider] : null;
   const providerModels = Array.isArray(providerConfig?.models) ? providerConfig.models : [];
-  const modelMeta = providerModels.find((m) => m.id === shortId || m.id === modelId) || {};
-  const configuredAlias = config.agents?.defaults?.models?.[modelId]?.alias || null;
+  const modelMeta = providerModels.find((m) => {
+    const id = String(m.id || '');
+    if (!id) return false;
+    return id === shortId ||
+      id === modelId ||
+      `${provider}/${id}` === modelId ||
+      shortId.endsWith(`/${id}`) ||
+      id.endsWith(`/${shortId}`);
+  }) || {};
+  const modelSettings = config.agents?.defaults?.models?.[modelId] ||
+    config.agents?.defaults?.models?.[shortId] ||
+    {};
+  const configuredAlias = modelSettings.alias || null;
   return { provider, id: modelId, name: modelMeta.name || shortId || modelId, alias: configuredAlias, contextWindow: modelMeta.contextWindow || null, maxTokens: modelMeta.maxTokens || null, reasoning: typeof modelMeta.reasoning === 'boolean' ? modelMeta.reasoning : null, input: Array.isArray(modelMeta.input) ? modelMeta.input : [] };
 }
 
