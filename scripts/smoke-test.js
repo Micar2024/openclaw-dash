@@ -61,6 +61,11 @@ async function runEndpointSmokeTests () {
       if (status !== 401) fail(`${route} should require authentication, got ${status}.`);
     }
 
+    const malformedCookieStatus = await request(serverInstance, '/api/status', {
+      headers: { Cookie: 'openclaw_dash_session=%E0%A4%A' }
+    });
+    if (malformedCookieStatus !== 401) fail(`/api/status should reject malformed cookies without 5xx, got ${malformedCookieStatus}.`);
+
     const authedStatus = await request(serverInstance, '/api/status', {
       headers: { Authorization: 'Bearer smoke-test-token' }
     });

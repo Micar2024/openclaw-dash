@@ -139,6 +139,21 @@ function createUpdateService (deps) {
     persistUpdateJob();
   }
 
+  async function restoreGatewayIfNeeded (shouldRestartGateway) {
+    if (!shouldRestartGateway) return;
+
+    const processes = await deps.getGatewayProcesses().catch(() => []);
+    if (processes.length) return;
+
+    addUpdateStep('恢复 Gateway', 'running', '更新流程失败，尝试恢复原本运行中的 Gateway。');
+    try {
+      await deps.runGatewayControl('start');
+      addUpdateStep('恢复 Gateway', 'success', 'Gateway 已恢复运行。');
+    } catch (error) {
+      addUpdateStep('恢复 Gateway', 'warning', `自动恢复 Gateway 失败：${error.message}`);
+    }
+  }
+
   async function runUpdateJob (req, shouldRestartGateway) {
     try {
       addUpdateStep('停止 Gateway', 'running');
@@ -191,6 +206,7 @@ function createUpdateService (deps) {
       deps.appendAudit(req, 'update', true, { jobId: updateJob.id, restartedGateway: shouldRestartGateway });
     } catch (error) {
       addUpdateStep('更新失败', 'error', error.message);
+      await restoreGatewayIfNeeded(shouldRestartGateway);
       finishUpdateJob('error', 'OpenClaw 更新流程失败。', error.message);
       deps.appendAudit(req, 'update', false, { jobId: updateJob.id, error: error.message });
     }

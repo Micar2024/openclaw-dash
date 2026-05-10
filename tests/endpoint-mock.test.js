@@ -109,6 +109,14 @@ if [ "$1" = "daemon" ]; then
   echo "daemon $2 ok"
   exit 0
 fi
+if [ "$1" = "update" ] && [ "$2" = "--help" ]; then
+  echo "update help"
+  exit 0
+fi
+if [ "$1" = "update" ]; then
+  echo "update failed" >&2
+  exit 1
+fi
 if [ "$1" = "doctor" ]; then
   echo "doctor ok"
   exit 0
@@ -118,7 +126,7 @@ echo "{}"
 
   writeFile(path.join(tempHome, '.openclaw/openclaw.json'), JSON.stringify({
     channels: {
-      feishu: { enabled: true, allowFrom: ['ou_mock'], appId: 'cli_mock' },
+      lark: { enabled: true, allowFrom: ['ou_mock'], appId: 'cli_mock' },
       telegram: { enabled: true, allowFrom: ['123456'] },
       email: { enabled: true, allowFrom: ['test@example.com'] }
     },
@@ -130,6 +138,37 @@ echo "{}"
     '2026-05-05T10:00:02 agent model: mock/provider',
     '2026-05-05T10:00:03 error token=abc123secret path=/Users/alice/.openclaw/openclaw.json open_id=ou_mocksecret ip=192.168.1.2 chat=123456789 url=https://api.telegram.org/bot123456789:ABCdefghijklmnopqrstuvwxyz/getMe runId=638d64ce-b68a-4157-bbe3-6e2829d0888b'
   ].join('\n'));
+
+  const { getFeishuCredentials } = require('../src/server/diagnostics-service');
+  const feishuCredentials = getFeishuCredentials();
+  assert.strictEqual(feishuCredentials.appId, 'cli_mock');
+  assert.strictEqual(feishuCredentials.appIdSource, 'openclaw-config:channels.lark.appId');
+
+  const { createUpdateService } = require('../src/server/update-service');
+  const { parseVersion, isVersionGreater } = require('../src/server/version-service');
+  let gatewayRunning = true;
+  const gatewayActions = [];
+  const updateService = createUpdateService({
+    appendAudit: () => {},
+    buildCompatibilityReport: async () => ({ ok: true, passed: 1, required: 1, checks: [] }),
+    buildDiagnostics: async () => ({ openclawProbe: { channels: {} }, recommendations: [] }),
+    getGatewayProcesses: async () => gatewayRunning ? [{ pid: 123, command: 'openclaw gateway' }] : [],
+    getLatestReleaseInfo: async () => ({ latestVersion: 'v2026.5.4' }),
+    getLocalVersion: async () => 'OpenClaw 2026.5.3',
+    isVersionGreater,
+    parseVersion,
+    runGatewayControl: async (action) => {
+      gatewayActions.push(action);
+      if (action === 'stop') gatewayRunning = false;
+      if (action === 'start') gatewayRunning = true;
+      return { success: true };
+    }
+  });
+  updateService.resetUpdateJob();
+  await updateService.runUpdateJob({ headers: {}, get: () => '', socket: {} }, true);
+  assert.strictEqual(updateService.getUpdateJob().status, 'error');
+  assert.deepStrictEqual(gatewayActions, ['stop', 'start']);
+  assert.ok(updateService.getUpdateJob().steps.some((step) => step.name === '恢复 Gateway' && step.status === 'success'));
 
   const { startDashboard } = require('../server');
   const server = startDashboard();

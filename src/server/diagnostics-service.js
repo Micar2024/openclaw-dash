@@ -98,12 +98,20 @@ async function getCachedOpenClawChannelProbe (force = false) {
   return channelProbeCache.promise;
 }
 
+function getFeishuChannelEntry (config) {
+  const channels = config.channels && typeof config.channels === 'object' ? config.channels : {};
+  if (channels.feishu) return { key: 'feishu', value: channels.feishu };
+  if (channels.lark) return { key: 'lark', value: channels.lark };
+  return { key: 'feishu', value: {} };
+}
+
 function getFeishuSecretPath (config) {
-  const secretRef = config.channels?.feishu?.appSecret || {};
+  const channelEntry = getFeishuChannelEntry(config);
+  const secretRef = channelEntry.value?.appSecret || {};
   if (secretRef.source === 'file' && typeof secretRef.id === 'string') {
     const cleanId = secretRef.id.replace(/^\/+/, '');
     const candidate = path.join(os.homedir(), '.openclaw/credentials', `${cleanId}.json`);
-    if (fs.existsSync(candidate)) return { path: candidate, source: `openclaw-config:${secretRef.id}` };
+    if (fs.existsSync(candidate)) return { path: candidate, source: `openclaw-config:channels.${channelEntry.key}.appSecret:${secretRef.id}` };
   }
 
   const fallback = path.join(os.homedir(), '.openclaw/credentials/lark.secrets.json');
@@ -120,9 +128,10 @@ function resolveFeishuAppSecret (config) {
     return { value: envSecret, source: 'env:OPENCLAW_DASH_FEISHU_APP_SECRET', schema: 'explicit-env', file: null, warning: null };
   }
 
-  const configSecret = config.channels?.feishu?.appSecret;
+  const channelEntry = getFeishuChannelEntry(config);
+  const configSecret = channelEntry.value?.appSecret;
   if (typeof configSecret === 'string' && configSecret.trim()) {
-    return { value: configSecret.trim(), source: 'openclaw-config:channels.feishu.appSecret', schema: 'literal', file: null, warning: null };
+    return { value: configSecret.trim(), source: `openclaw-config:channels.${channelEntry.key}.appSecret`, schema: 'literal', file: null, warning: null };
   }
 
   const secretLocation = getFeishuSecretPath(config);
@@ -153,20 +162,22 @@ function resolveFeishuAppSecret (config) {
 
 function getFeishuCredentials () {
   const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
+  const channelEntry = getFeishuChannelEntry(config);
+  const channelConfig = channelEntry.value || {};
   const envAppId = (process.env.OPENCLAW_DASH_FEISHU_APP_ID || '').trim();
-  const appId = envAppId || config.channels?.feishu?.appId || null;
+  const appId = envAppId || channelConfig.appId || null;
   const secret = resolveFeishuAppSecret(config);
 
   return {
     appId,
     appSecret: secret.value,
-    domain: config.channels?.feishu?.domain || 'feishu',
-    connectionMode: config.channels?.feishu?.connectionMode || null,
-    enabled: Boolean(config.channels?.feishu?.enabled),
-    blockStreamingConfigured: Object.prototype.hasOwnProperty.call(config.channels?.feishu || {}, 'blockStreaming'),
-    blockStreaming: config.channels?.feishu?.blockStreaming,
+    domain: channelConfig.domain || 'feishu',
+    connectionMode: channelConfig.connectionMode || null,
+    enabled: Boolean(channelConfig.enabled),
+    blockStreamingConfigured: Object.prototype.hasOwnProperty.call(channelConfig, 'blockStreaming'),
+    blockStreaming: channelConfig.blockStreaming,
     secretFile: secret.file ? path.basename(secret.file) : null,
-    appIdSource: envAppId ? 'env:OPENCLAW_DASH_FEISHU_APP_ID' : 'openclaw-config:channels.feishu.appId',
+    appIdSource: envAppId ? 'env:OPENCLAW_DASH_FEISHU_APP_ID' : `openclaw-config:channels.${channelEntry.key}.appId`,
     credentialSource: secret.source,
     credentialSchema: secret.schema,
     credentialWarning: secret.warning

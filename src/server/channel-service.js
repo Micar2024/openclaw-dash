@@ -96,6 +96,10 @@ function createChannelService (deps) {
     return channels[channel] || (channel === 'feishu' ? channels.lark : null) || {};
   }
 
+  function getFeishuChannelConfig () {
+    return getChannelConfig('feishu');
+  }
+
   function getProbeChannels (probe) {
     const names = new Set();
     for (const key of Object.keys(probe?.channels || {})) names.add(normalizeChannelId(key));
@@ -357,8 +361,7 @@ function createChannelService (deps) {
 
   async function verifyFeishuChannel () {
     const creds = deps.getFeishuCredentials();
-    const config = readJsonFile(OPENCLAW_CONFIG_PATH) || {};
-    const receiveId = config.channels?.feishu?.allowFrom?.[0] || null;
+    const receiveId = getFeishuChannelConfig().allowFrom?.[0] || null;
     const baseUrl = creds.domain === 'larksuite' ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
 
     if (!receiveId) throw new Error('Feishu allowFrom is empty, so the test-message recipient cannot be determined.');

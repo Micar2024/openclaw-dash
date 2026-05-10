@@ -51,7 +51,11 @@ function createAuthService () {
       if (index === -1) return cookies;
       const key = item.slice(0, index).trim();
       const value = item.slice(index + 1).trim();
-      cookies[key] = decodeURIComponent(value);
+      try {
+        cookies[key] = decodeURIComponent(value);
+      } catch {
+        cookies[key] = value;
+      }
       return cookies;
     }, {});
   }
