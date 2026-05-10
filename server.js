@@ -43,6 +43,7 @@ const {
 const {
   buildCompatibilityReport,
   buildConfigHealth,
+  buildCoreFilesHealth,
   createDiagnosticsService,
   getCachedOpenClawChannelProbe,
   getCurrentModelInfo,
@@ -422,6 +423,7 @@ registerDiagnosticsRoutes(app, {
   appendAudit,
   buildCompatibilityReport,
   buildConfigHealth,
+  buildCoreFilesHealth,
   buildDiagnostics,
   getCurrentModelInfo
 });
@@ -464,6 +466,7 @@ registerReportRoutes(app, {
   buildMarkdownReport: () => buildMarkdownReport({
     buildCompatibilityReport,
     buildConfigHealth,
+    buildCoreFilesHealth,
     buildDiagnostics,
     buildHealthSummary,
     buildTroubleshootingGuide,
@@ -474,6 +477,7 @@ registerReportRoutes(app, {
   buildSupportBundle: () => buildSupportBundle({
     buildCompatibilityReport,
     buildConfigHealth,
+    buildCoreFilesHealth,
     buildDiagnostics,
     buildHealthSummary,
     buildTroubleshootingGuide,

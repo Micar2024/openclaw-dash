@@ -15,12 +15,13 @@ function markdownEscape (value) {
 }
 
 async function buildMarkdownReport (deps) {
-  const [metricsResult, diagnosticsResult, healthResult, officialResult, troubleshootingResult, errorsResult] = await Promise.all([
+  const [metricsResult, diagnosticsResult, healthResult, officialResult, troubleshootingResult, coreFilesResult, errorsResult] = await Promise.all([
     collectSection('metrics', deps.buildMetrics),
     collectSection('diagnostics', deps.buildDiagnostics),
     collectSection('health', deps.buildHealthSummary),
     collectSection('official-dashboard', deps.getOfficialDashboardStatus),
     collectSection('troubleshooting', deps.buildTroubleshootingGuide),
+    collectSection('core-files', deps.buildCoreFilesHealth),
     collectSection('errors', () => deps.readRecentErrorEntriesWithMeta(1000, 8))
   ]);
   const metrics = metricsResult.data || {};
@@ -28,6 +29,7 @@ async function buildMarkdownReport (deps) {
   const health = healthResult.data || {};
   const official = officialResult.data || {};
   const troubleshooting = troubleshootingResult.data || {};
+  const coreFiles = coreFilesResult.data || {};
   const errors = errorsResult.data || { errors: [] };
   const lines = [];
   lines.push('# OpenClaw Dash 诊断报告');
@@ -111,6 +113,19 @@ async function buildMarkdownReport (deps) {
     lines.push(`- 系统资源收集失败：${markdownEscape(metricsResult.error)}`);
   }
   lines.push('');
+  lines.push('## 核心文件健康');
+  lines.push('');
+  if (coreFilesResult.ok) {
+    lines.push(`- 得分：${markdownEscape(coreFiles.score ?? '-')}/100`);
+    lines.push(`- 结论：${markdownEscape(coreFiles.summary || '-')}`);
+    lines.push(`- 隐私：${markdownEscape(coreFiles.privacy || '-')}`);
+    for (const check of (coreFiles.checks || []).slice(0, 10)) {
+      lines.push(`- ${markdownEscape(check.name)}: ${markdownEscape(check.detail)} (${markdownEscape(check.level)})`);
+    }
+  } else {
+    lines.push(`- 核心文件健康收集失败：${markdownEscape(coreFilesResult.error)}`);
+  }
+  lines.push('');
   lines.push('## 建议');
   lines.push('');
   if (diagnosticsResult.ok) {
@@ -187,6 +202,7 @@ async function buildSupportBundle (deps) {
     collectSection('health.json', deps.buildHealthSummary),
     collectSection('official-dashboard.json', deps.getOfficialDashboardStatus),
     collectSection('troubleshooting.json', deps.buildTroubleshootingGuide),
+    collectSection('core-files-health.json', deps.buildCoreFilesHealth),
     collectSection('compatibility.json', deps.buildCompatibilityReport),
     collectSection('config-health.json', deps.buildConfigHealth),
     collectSection('errors.json', () => deps.readRecentErrorEntriesWithMeta(1000, 20))

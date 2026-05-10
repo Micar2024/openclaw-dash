@@ -142,6 +142,9 @@ const preflightPillEl = document.getElementById('preflight-pill');
 const preflightListEl = document.getElementById('preflight-list');
 const versionSourcesListEl = document.getElementById('version-sources-list');
 const configHealthListEl = document.getElementById('config-health-list');
+const coreFilesPillEl = document.getElementById('core-files-pill');
+const coreFilesSummaryEl = document.getElementById('core-files-summary');
+const coreFilesListEl = document.getElementById('core-files-list');
 const logRulesPillEl = document.getElementById('log-rules-pill');
 const logRulesListEl = document.getElementById('log-rules-list');
 const officialDashboardSummaryEl = document.getElementById('official-dashboard-summary');
@@ -668,18 +671,21 @@ async function loadSetupStatus() {
 async function loadAssurance() {
   assuranceSummaryEl.textContent = '检查中...';
   try {
-    const [compatibility, preflight, versionSources, configHealth, logRules] = await Promise.all([
+    const [compatibility, preflight, versionSources, configHealth, coreFiles, logRules] = await Promise.all([
       authFetch('/api/compatibility').then((res) => res.json()),
       authFetch('/api/update/preflight').then((res) => res.json()),
       authFetch('/api/version/sources').then((res) => res.json()),
       authFetch('/api/config/health').then((res) => res.json()),
+      authFetch('/api/core-files/health').then((res) => res.json()),
       authFetch('/api/log-rules').then((res) => res.json()),
     ]);
 
+    const coreFileAttention = (coreFiles.checks || []).some((check) => check.level === 'critical' || check.level === 'warning');
     const attention = [
       !compatibility.ok,
       !preflight.ok && preflight.updateAvailable,
       (versionSources.sources || []).every((source) => !source.ok),
+      coreFileAttention,
     ].filter(Boolean).length;
     assuranceSummaryEl.textContent = attention ? `发现 ${attention} 项需要关注` : '系统保障正常';
     assuranceSummaryEl.className = `mt-3 text-2xl font-semibold ${attention ? 'text-amber-300' : 'text-emerald-300'}`;
@@ -701,11 +707,19 @@ async function loadAssurance() {
       detail: source.ok ? source.status : source.detail,
     })));
 
-          configHealthListEl.innerHTML = renderMiniRows((configHealth.channels || []).map((channel) => ({
-            name: `${channel.channel} · ${channel.enabled ? '已启用' : '已禁用'}`,
-            ok: channel.enabled,
-          detail: `allowFrom ${channel.allowFromCount}，groupAllowFrom ${channel.groupAllowFromCount}，blockStreaming ${channel.blockStreamingConfigured ? channel.blockStreaming : '未配置'}`,
-          })));
+    configHealthListEl.innerHTML = renderMiniRows((configHealth.channels || []).map((channel) => ({
+      name: `${channel.channel} · ${channel.enabled ? '已启用' : '已禁用'}`,
+      ok: channel.enabled,
+      detail: `allowFrom ${channel.allowFromCount}，groupAllowFrom ${channel.groupAllowFromCount}，blockStreaming ${channel.blockStreamingConfigured ? channel.blockStreaming : '未配置'}`,
+    })));
+
+    renderStatusPill(coreFilesPillEl, !coreFileAttention, `${coreFiles.score ?? '-'}分`);
+    coreFilesSummaryEl.textContent = `${coreFiles.summary || '核心文件检查完成。'} ${coreFiles.privacy || ''}`;
+    coreFilesListEl.innerHTML = renderMiniRows((coreFiles.checks || []).slice(0, 8).map((check) => ({
+      name: `${check.name}${check.level && check.level !== 'ok' ? ' · ' + check.level : ''}`,
+      ok: check.level !== 'critical' && check.level !== 'warning',
+      detail: check.detail,
+    })));
 
     logRulesPillEl.textContent = `已启用 ${logRules.activeCount || 0} 条`;
     logRulesListEl.innerHTML = (logRules.rules || []).map((rule) => `

@@ -199,6 +199,13 @@ echo "{}"
     assert.strictEqual(config.status, 200);
     assert.strictEqual(config.json.configExists, true);
 
+    const coreFiles = await request(server, '/api/core-files/health', { headers });
+    assert.strictEqual(coreFiles.status, 200);
+    assert.ok(Number.isFinite(coreFiles.json.score));
+    assert.ok(Array.isArray(coreFiles.json.checks));
+    assert.ok(coreFiles.json.checks.some((check) => check.id === 'openclaw-config-json' && check.level === 'ok'));
+    assert.match(coreFiles.json.privacy, /不会读取或输出密钥内容/);
+
     const diagnostics = await request(server, '/api/diagnostics', { headers });
     assert.strictEqual(diagnostics.status, 200);
     assert.strictEqual(diagnostics.json.openclawProbe.ok, true);
@@ -231,6 +238,7 @@ echo "{}"
     assert.match(report.body, /Gateway/);
     assert.match(report.body, /官方 Dashboard/);
     assert.match(report.body, /故障排查路径/);
+    assert.match(report.body, /核心文件健康/);
     assert.match(report.body, /脱敏说明/);
     assert.match(report.body, /容错说明/);
     assert.doesNotMatch(report.body, /abc123secret|\/Users\/alice|ou_mocksecret|192\.168\.1\.2|ABCdefghijklmnopqrstuvwxyz|638d64ce/);
@@ -242,6 +250,7 @@ echo "{}"
     assert.deepStrictEqual(bundleNames.sort(), [
       'compatibility.json',
       'config-health.json',
+      'core-files-health.json',
       'diagnostics.json',
       'environment.json',
       'errors.json',

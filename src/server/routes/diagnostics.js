@@ -46,6 +46,14 @@ function registerDiagnosticsRoutes (app, deps) {
       res.status(500).json({ error: error.message });
     }
   });
+
+  app.get('/api/core-files/health', (req, res) => {
+    try {
+      res.json(deps.buildCoreFilesHealth());
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 }
 
 module.exports = { registerDiagnosticsRoutes };

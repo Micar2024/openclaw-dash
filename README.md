@@ -26,6 +26,7 @@ A lightweight local diagnostic toolkit for the OpenClaw community. Open the dash
 - WebSocket realtime push for Gateway and channel state, with polling as a fallback.
 - Memory and disk monitoring for macOS.
 - Read-only configuration health view for channel enablement, allowlist counts, and `blockStreaming`.
+- Core OpenClaw file health analysis for config JSON, logs, CLI path, update cache, and credential-directory metadata without exposing secret values.
 - Log noise muting for known harmless lines such as `bot open_id resolved: unknown`.
 - High-resolution long screenshot export with automatic masking for common private identifiers.
 - First-run wizard for OpenClaw CLI, Gateway, log paths, config readability, token, LaunchAgent, and access mode.

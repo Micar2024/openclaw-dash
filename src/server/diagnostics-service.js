@@ -6,9 +6,11 @@ const { execFile } = require('child_process');
 const {
   CHANNEL_STATS_TAIL_LINES,
   DASHBOARD_PATH,
+  ERR_LOG_PATH,
   LOG_PATH,
   OPENCLAW_BIN,
-  OPENCLAW_CONFIG_PATH
+  OPENCLAW_CONFIG_PATH,
+  UPDATE_CHECK_PATH
 } = require('./config');
 const { readJsonFile, readTail } = require('./runtime');
 
@@ -120,6 +122,317 @@ function getFeishuSecretPath (config) {
 
 function getNestedValue (source, keyPath) {
   return keyPath.split('.').reduce((value, key) => (value && typeof value === 'object' ? value[key] : undefined), source);
+}
+
+function formatMode (mode) {
+  return `0${(mode & 0o777).toString(8)}`;
+}
+
+function formatSize (bytes) {
+  if (!Number.isFinite(bytes)) return '-';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function inspectPath (filePath, expectedType = 'file') {
+  const result = {
+    path: filePath,
+    exists: false,
+    readable: false,
+    writable: false,
+    executable: false,
+    type: null,
+    sizeBytes: null,
+    sizeLabel: '-',
+    modifiedAt: null,
+    mode: null,
+    groupOrWorldWritable: false,
+    groupOrWorldReadable: false
+  };
+
+  try {
+    const stat = fs.statSync(filePath);
+    result.exists = true;
+    result.type = stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : stat.isSymbolicLink() ? 'symlink' : 'other';
+    result.sizeBytes = stat.size;
+    result.sizeLabel = formatSize(stat.size);
+    result.modifiedAt = stat.mtime.toISOString();
+    result.mode = formatMode(stat.mode);
+    result.groupOrWorldWritable = Boolean(stat.mode & 0o022);
+    result.groupOrWorldReadable = Boolean(stat.mode & 0o044);
+  } catch {
+    return result;
+  }
+
+  try { fs.accessSync(filePath, fs.constants.R_OK); result.readable = true; } catch {}
+  try { fs.accessSync(filePath, fs.constants.W_OK); result.writable = true; } catch {}
+  try { fs.accessSync(filePath, fs.constants.X_OK); result.executable = true; } catch {}
+
+  if (expectedType && result.type !== expectedType) result.typeMismatch = true;
+  return result;
+}
+
+function readJsonForHealth (filePath) {
+  try {
+    return { data: JSON.parse(fs.readFileSync(filePath, 'utf8')), error: null };
+  } catch (error) {
+    return { data: null, error: error.message };
+  }
+}
+
+function addCoreCheck (checks, check) {
+  checks.push({
+    id: check.id,
+    name: check.name,
+    ok: check.level !== 'critical' && check.level !== 'warning',
+    level: check.level || 'ok',
+    detail: check.detail,
+    path: check.path || null,
+    meta: check.meta || null,
+    penalty: check.penalty || 0
+  });
+}
+
+function findInlineSecretFields (value, prefix = '') {
+  if (!value || typeof value !== 'object') return [];
+  const secretKeys = /^(appSecret|app_secret|botToken|token|password|secret|access_token|refresh_token|tenant_access_token)$/i;
+  return Object.entries(value).flatMap(([key, item]) => {
+    const pathName = prefix ? `${prefix}.${key}` : key;
+    const current = secretKeys.test(key) && typeof item === 'string' && item.trim() ? [pathName] : [];
+    return current.concat(findInlineSecretFields(item, pathName));
+  });
+}
+
+function buildConfigShapeChecks (checks, configMeta) {
+  if (!configMeta.exists || !configMeta.readable || configMeta.type !== 'file') return null;
+  const parsed = readJsonForHealth(OPENCLAW_CONFIG_PATH);
+  if (parsed.error) {
+    addCoreCheck(checks, {
+      id: 'openclaw-config-json',
+      name: 'openclaw.json 语法',
+      level: 'critical',
+      detail: `JSON 解析失败：${parsed.error}`,
+      path: OPENCLAW_CONFIG_PATH,
+      penalty: 35
+    });
+    return null;
+  }
+
+  const config = parsed.data && typeof parsed.data === 'object' ? parsed.data : {};
+  const channels = config.channels && typeof config.channels === 'object' ? config.channels : {};
+  const enabledChannels = Object.entries(channels)
+    .filter(([, value]) => value?.enabled !== false)
+    .map(([name]) => name);
+  const inlineSecretFields = findInlineSecretFields(config);
+
+  addCoreCheck(checks, {
+    id: 'openclaw-config-json',
+    name: 'openclaw.json 语法',
+    level: 'ok',
+    detail: '配置文件 JSON 可解析。',
+    path: OPENCLAW_CONFIG_PATH
+  });
+
+  addCoreCheck(checks, {
+    id: 'openclaw-config-channels',
+    name: '通道配置结构',
+    level: Object.keys(channels).length ? 'ok' : 'warning',
+    detail: Object.keys(channels).length
+      ? `已配置 ${Object.keys(channels).length} 个通道，启用 ${enabledChannels.length} 个。`
+      : '未检测到 channels 配置；通道诊断只能依赖日志或 CLI probe。',
+    path: OPENCLAW_CONFIG_PATH,
+    penalty: Object.keys(channels).length ? 0 : 8
+  });
+
+  addCoreCheck(checks, {
+    id: 'openclaw-config-inline-secrets',
+    name: '配置密钥形态',
+    level: inlineSecretFields.length ? 'warning' : 'ok',
+    detail: inlineSecretFields.length
+      ? `检测到 ${inlineSecretFields.length} 个疑似内联密钥字段；报告不会输出值，建议迁移到凭据文件或环境变量。`
+      : '未检测到明显内联密钥字段。',
+    path: OPENCLAW_CONFIG_PATH,
+    penalty: inlineSecretFields.length ? 6 : 0
+  });
+
+  return { config, enabledChannels, inlineSecretFields };
+}
+
+function buildCoreFilesHealth () {
+  const openclawHome = path.join(os.homedir(), '.openclaw');
+  const logsDir = path.join(openclawHome, 'logs');
+  const credentialsDir = path.join(openclawHome, 'credentials');
+  const checks = [];
+  const files = {
+    openclawHome: inspectPath(openclawHome, 'directory'),
+    openclawBin: inspectPath(OPENCLAW_BIN, 'file'),
+    config: inspectPath(OPENCLAW_CONFIG_PATH, 'file'),
+    logsDir: inspectPath(logsDir, 'directory'),
+    gatewayLog: inspectPath(LOG_PATH, 'file'),
+    gatewayErrLog: inspectPath(ERR_LOG_PATH, 'file'),
+    credentialsDir: inspectPath(credentialsDir, 'directory'),
+    updateCheck: inspectPath(UPDATE_CHECK_PATH, 'file')
+  };
+
+  addCoreCheck(checks, {
+    id: 'openclaw-home',
+    name: 'OpenClaw 数据目录',
+    level: files.openclawHome.exists && files.openclawHome.readable && files.openclawHome.writable && files.openclawHome.type === 'directory' ? 'ok' : 'critical',
+    detail: files.openclawHome.exists
+      ? `目录${files.openclawHome.readable ? '可读' : '不可读'}，${files.openclawHome.writable ? '可写' : '不可写'}，权限 ${files.openclawHome.mode || '-'}。`
+      : '未找到 ~/.openclaw，OpenClaw 尚未初始化或 HOME 不正确。',
+    path: openclawHome,
+    meta: files.openclawHome,
+    penalty: files.openclawHome.exists && files.openclawHome.readable && files.openclawHome.writable ? 0 : 35
+  });
+
+  addCoreCheck(checks, {
+    id: 'openclaw-bin',
+    name: 'OpenClaw CLI 文件',
+    level: files.openclawBin.exists && files.openclawBin.executable ? 'ok' : 'critical',
+    detail: files.openclawBin.exists
+      ? `CLI ${files.openclawBin.executable ? '可执行' : '不可执行'}，大小 ${files.openclawBin.sizeLabel}。`
+      : '未找到 OpenClaw CLI 文件。',
+    path: OPENCLAW_BIN,
+    meta: files.openclawBin,
+    penalty: files.openclawBin.exists && files.openclawBin.executable ? 0 : 25
+  });
+
+  addCoreCheck(checks, {
+    id: 'openclaw-config-file',
+    name: 'OpenClaw 配置文件',
+    level: files.config.exists && files.config.readable && files.config.type === 'file' ? (files.config.groupOrWorldWritable ? 'warning' : 'ok') : 'critical',
+    detail: files.config.exists
+      ? `配置文件${files.config.readable ? '可读' : '不可读'}，大小 ${files.config.sizeLabel}，权限 ${files.config.mode || '-'}。${files.config.groupOrWorldWritable ? '存在组/其他用户可写风险。' : ''}`
+      : '未找到 openclaw.json。',
+    path: OPENCLAW_CONFIG_PATH,
+    meta: files.config,
+    penalty: files.config.exists && files.config.readable ? (files.config.groupOrWorldWritable ? 6 : 0) : 35
+  });
+
+  const configHealth = buildConfigShapeChecks(checks, files.config);
+
+  addCoreCheck(checks, {
+    id: 'openclaw-log-dir',
+    name: 'Gateway 日志目录',
+    level: files.logsDir.exists && files.logsDir.readable && files.logsDir.type === 'directory' ? 'ok' : 'warning',
+    detail: files.logsDir.exists
+      ? `日志目录${files.logsDir.readable ? '可读' : '不可读'}，${files.logsDir.writable ? '可写' : '不可写'}。`
+      : '未找到 logs 目录；Gateway 日志分析会受限。',
+    path: logsDir,
+    meta: files.logsDir,
+    penalty: files.logsDir.exists && files.logsDir.readable ? 0 : 10
+  });
+
+  for (const item of [
+    { id: 'gateway-log', name: 'gateway.log', meta: files.gatewayLog, filePath: LOG_PATH, optional: false },
+    { id: 'gateway-err-log', name: 'gateway.err.log', meta: files.gatewayErrLog, filePath: ERR_LOG_PATH, optional: true }
+  ]) {
+    const large = Number(item.meta.sizeBytes || 0) > 50 * 1024 * 1024;
+    const missingLevel = item.optional ? 'ok' : 'warning';
+    addCoreCheck(checks, {
+      id: item.id,
+      name: item.name,
+      level: item.meta.exists
+        ? item.meta.readable
+          ? large ? 'warning' : 'ok'
+          : 'warning'
+        : missingLevel,
+      detail: item.meta.exists
+        ? `文件${item.meta.readable ? '可读' : '不可读'}，大小 ${item.meta.sizeLabel}，最后修改 ${item.meta.modifiedAt || '-'}。${large ? '日志超过 50 MB，建议检查轮转策略。' : ''}`
+        : (item.optional ? '未找到，可选错误日志。' : '未找到 gateway.log；运行态日志诊断会受限。'),
+      path: item.filePath,
+      meta: item.meta,
+      penalty: item.meta.exists && item.meta.readable && !large ? 0 : item.optional ? 0 : 8
+    });
+  }
+
+  let credentialFileCount = 0;
+  let credentialRiskCount = 0;
+  if (files.credentialsDir.exists && files.credentialsDir.readable && files.credentialsDir.type === 'directory') {
+    try {
+      const entries = fs.readdirSync(credentialsDir, { withFileTypes: true });
+      const filesOnly = entries.filter((entry) => entry.isFile());
+      credentialFileCount = filesOnly.length;
+      credentialRiskCount = filesOnly.filter((entry) => {
+        try {
+          return Boolean(fs.statSync(path.join(credentialsDir, entry.name)).mode & 0o077);
+        } catch {
+          return false;
+        }
+      }).length;
+    } catch {}
+  }
+
+  addCoreCheck(checks, {
+    id: 'openclaw-credentials-dir',
+    name: '凭据目录',
+    level: !files.credentialsDir.exists
+      ? 'warning'
+      : (files.credentialsDir.groupOrWorldReadable || credentialRiskCount ? 'warning' : 'ok'),
+    detail: files.credentialsDir.exists
+      ? `凭据目录可见，包含 ${credentialFileCount} 个文件；未读取密钥内容。${files.credentialsDir.groupOrWorldReadable || credentialRiskCount ? '检测到组/其他用户权限，建议收紧。' : '权限形态正常。'}`
+      : '未找到 credentials 目录；如果全部使用环境变量可忽略。',
+    path: credentialsDir,
+    meta: { ...files.credentialsDir, fileCount: credentialFileCount, riskyFileCount: credentialRiskCount },
+    penalty: files.credentialsDir.exists ? (files.credentialsDir.groupOrWorldReadable || credentialRiskCount ? 8 : 0) : 4
+  });
+
+  if (files.updateCheck.exists) {
+    const updateJson = readJsonForHealth(UPDATE_CHECK_PATH);
+    addCoreCheck(checks, {
+      id: 'openclaw-update-cache',
+      name: '更新缓存',
+      level: updateJson.error ? 'warning' : 'ok',
+      detail: updateJson.error ? `update-check.json 解析失败：${updateJson.error}` : `更新缓存可解析，最后修改 ${files.updateCheck.modifiedAt || '-'}。`,
+      path: UPDATE_CHECK_PATH,
+      meta: files.updateCheck,
+      penalty: updateJson.error ? 6 : 0
+    });
+  } else {
+    addCoreCheck(checks, {
+      id: 'openclaw-update-cache',
+      name: '更新缓存',
+      level: 'ok',
+      detail: '未找到 update-check.json；会使用 GitHub/npm 版本源。',
+      path: UPDATE_CHECK_PATH,
+      meta: files.updateCheck
+    });
+  }
+
+  const penalty = checks.reduce((sum, check) => sum + (check.penalty || 0), 0);
+  const score = Math.max(0, Math.min(100, 100 - penalty));
+  const level = score >= 90 ? 'healthy' : score >= 75 ? 'attention' : score >= 60 ? 'degraded' : 'critical';
+  const summary = level === 'healthy'
+    ? 'OpenClaw 核心文件状态健康。'
+    : level === 'attention'
+      ? 'OpenClaw 核心文件有少量需要关注的项目。'
+      : level === 'degraded'
+        ? 'OpenClaw 核心文件存在会影响诊断或运行的风险。'
+        : 'OpenClaw 核心文件存在关键问题。';
+
+  return {
+    ok: !checks.some((check) => check.level === 'critical'),
+    score,
+    level,
+    summary,
+    checks,
+    paths: {
+      openclawHome,
+      openclawBin: OPENCLAW_BIN,
+      config: OPENCLAW_CONFIG_PATH,
+      logsDir,
+      credentialsDir
+    },
+    stats: {
+      enabledChannels: configHealth?.enabledChannels || [],
+      credentialFileCount,
+      credentialRiskCount
+    },
+    privacy: '凭据目录仅检查元数据、权限和文件数量；不会读取或输出密钥内容。',
+    collectedAt: new Date().toISOString()
+  };
 }
 
 function resolveFeishuAppSecret (config) {
@@ -413,6 +726,7 @@ function buildConfigHealth () {
 module.exports = {
   buildCompatibilityReport,
   buildConfigHealth,
+  buildCoreFilesHealth,
   createDiagnosticsService,
   getCachedOpenClawChannelProbe,
   getCurrentModelInfo,
