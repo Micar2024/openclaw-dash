@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { execFile } = require('child_process');
 const {
   CHANNEL_ALERT_INTERVAL_MS,
   CONTROL_ACTIONS,
@@ -204,6 +205,23 @@ function fileCheck (name, filePath, options = {}) {
     path: filePath,
     detail: exists ? (readable ? '可读' : '文件存在但不可读') : (options.optional ? '未找到，可选项' : '未找到')
   };
+}
+
+function restartDashboard () {
+  return new Promise((resolve, reject) => {
+    if (process.platform !== 'darwin' || typeof process.getuid !== 'function') {
+      reject(new Error('Dashboard restart through launchctl is only supported on macOS.'));
+      return;
+    }
+
+    execFile('launchctl', ['kickstart', '-k', `gui/${process.getuid()}/com.openclaw.dashboard`], { timeout: 10000 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error((stderr || stdout || error.message).trim()));
+        return;
+      }
+      resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+  });
 }
 
 async function buildSetupStatus () {
@@ -441,10 +459,12 @@ registerUpdateRoutes(app, {
 registerMetricsRoutes(app, { buildMetrics });
 
 registerProductRoutes(app, {
+  appendAudit,
   buildHealthSummary,
   buildSetupStatus,
   buildTroubleshootingGuide,
-  getOfficialDashboardStatus
+  getOfficialDashboardStatus,
+  restartDashboard
 });
 
 registerLogRoutes(app, {

@@ -126,6 +126,7 @@ const updateDetailsToggle = document.getElementById('update-details-toggle');
 const exportScreenshotBtn = document.getElementById('export-screenshot-btn');
 const exportReportBtn = document.getElementById('export-report-btn');
 const exportBundleBtn = document.getElementById('export-bundle-btn');
+const restartDashboardBtn = document.getElementById('restart-dashboard-btn');
 const healthScoreEl = document.getElementById('health-score');
 const healthSummaryEl = document.getElementById('health-summary');
 const healthLevelEl = document.getElementById('health-level');
@@ -415,6 +416,26 @@ async function exportSupportBundle() {
   } finally {
     exportBundleBtn.disabled = false;
     exportBundleBtn.textContent = oldText;
+  }
+}
+
+async function restartDashboard() {
+  if (!window.confirm('确认重启 Dashboard 后端服务吗？页面会在几秒后自动刷新。')) return;
+
+  restartDashboardBtn.disabled = true;
+  const oldText = restartDashboardBtn.textContent;
+  restartDashboardBtn.textContent = '重启中...';
+  try {
+    const response = await authFetch('/api/dashboard/restart', { method: 'POST' });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.message || '重启请求失败。');
+    showApiError('Dashboard 正在重启', '后端服务会通过 launchctl 重启，页面将自动刷新。');
+    closeRealtime();
+    setTimeout(() => window.location.reload(), 6000);
+  } catch (error) {
+    restartDashboardBtn.disabled = false;
+    restartDashboardBtn.textContent = oldText;
+    showApiError('Dashboard 重启失败', error.message);
   }
 }
 
