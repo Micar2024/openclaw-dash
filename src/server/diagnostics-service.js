@@ -205,12 +205,18 @@ function addCoreCheck (checks, check) {
   });
 }
 
+function isKnownOpenClawRuntimeSecretPath (pathName) {
+  return /^channels\.(feishu|lark)\.token$/i.test(pathName) ||
+    /^channels\.telegram\.botToken$/i.test(pathName) ||
+    /^gateway\.auth\.(token|password)$/i.test(pathName);
+}
+
 function findInlineSecretFields (value, prefix = '') {
   if (!value || typeof value !== 'object') return [];
   const secretKeys = /^(appSecret|app_secret|botToken|token|password|secret|access_token|refresh_token|tenant_access_token)$/i;
   return Object.entries(value).flatMap(([key, item]) => {
     const pathName = prefix ? `${prefix}.${key}` : key;
-    const current = secretKeys.test(key) && typeof item === 'string' && item.trim() ? [pathName] : [];
+    const current = secretKeys.test(key) && typeof item === 'string' && item.trim() && !isKnownOpenClawRuntimeSecretPath(pathName) ? [pathName] : [];
     return current.concat(findInlineSecretFields(item, pathName));
   });
 }
@@ -262,7 +268,7 @@ function buildConfigShapeChecks (checks, configMeta) {
     level: inlineSecretFields.length ? 'warning' : 'ok',
     detail: inlineSecretFields.length
       ? `检测到 ${inlineSecretFields.length} 个疑似内联密钥字段；报告不会输出值，建议迁移到凭据文件或环境变量。`
-      : '未检测到明显内联密钥字段。',
+      : '未检测到未知位置的内联密钥字段；已知 Gateway/通道认证字段按 OpenClaw 运行配置处理。',
     path: OPENCLAW_CONFIG_PATH,
     penalty: inlineSecretFields.length ? 6 : 0
   });

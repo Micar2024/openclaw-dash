@@ -126,8 +126,8 @@ echo "{}"
 
   writeFile(path.join(tempHome, '.openclaw/openclaw.json'), JSON.stringify({
     channels: {
-      lark: { enabled: true, allowFrom: ['ou_mock'], appId: 'cli_mock' },
-      telegram: { enabled: true, allowFrom: ['123456'] },
+      lark: { enabled: true, allowFrom: ['ou_mock'], appId: 'cli_mock', token: 'gateway_mock_token' },
+      telegram: { enabled: true, allowFrom: ['123456'], botToken: '123456:mockTelegramTokenValue' },
       email: { enabled: true, allowFrom: ['test@example.com'] }
     },
     plugins: { entries: {} },
@@ -228,6 +228,7 @@ echo "{}"
     assert.ok(Number.isFinite(coreFiles.json.score));
     assert.ok(Array.isArray(coreFiles.json.checks));
     assert.ok(coreFiles.json.checks.some((check) => check.id === 'openclaw-config-json' && check.level === 'ok'));
+    assert.ok(coreFiles.json.checks.some((check) => check.id === 'openclaw-config-inline-secrets' && check.level === 'ok'));
     assert.match(coreFiles.json.privacy, /不会读取或输出密钥内容/);
 
     const diagnostics = await request(server, '/api/diagnostics', { headers });
